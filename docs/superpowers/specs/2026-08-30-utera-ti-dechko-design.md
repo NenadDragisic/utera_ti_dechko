@@ -1,7 +1,7 @@
 # Utera Ti Dechko — Godot Game Design
 
 **Date:** 2026-08-30
-**Status:** Approved design, pending written-spec review
+**Status:** Approved
 **Targets:** Windows, Web, Android
 **Engine:** Godot 4.7.2-stable, standard build, typed GDScript
 **Reference:** <https://www.hangman.rs/dechko/>
