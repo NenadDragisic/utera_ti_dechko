@@ -3,6 +3,10 @@ extends RefCounted
 
 
 static func evaluate(guess: String, answer: String) -> GuessRow:
+	return GuessRow.new(guess, marks_for(guess, answer))
+
+
+static func marks_for(guess: String, answer: String) -> Array[LetterMark.Value]:
 	assert(WordPool._is_valid_word(guess))
 	assert(WordPool._is_valid_word(answer))
 
@@ -34,4 +38,4 @@ static func evaluate(guess: String, answer: String) -> GuessRow:
 			consumed[answer_index] = true
 			break
 
-	return GuessRow.new(guess, marks)
+	return marks

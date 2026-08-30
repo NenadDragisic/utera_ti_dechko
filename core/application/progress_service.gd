@@ -159,7 +159,10 @@ func _validate_document(document: Dictionary) -> String:
 	var bundle_error := _validate_bundle(document["bundle"], active_answers)
 	if not bundle_error.is_empty():
 		return bundle_error
-	return _validate_bag(document["bag"], document["pool_fingerprint"])
+	var bag_error := _validate_bag(document["bag"], document["pool_fingerprint"], active_answers)
+	if not bag_error.is_empty():
+		return bag_error
+	return _validate_statistics_coherence(document)
 
 
 func _validate_settings(data: Dictionary) -> String:
@@ -271,7 +274,7 @@ func _validate_board(
 	if data["rows"].size() > attempt_index:
 		return "Табла има превише редова."
 	for row_data in data["rows"]:
-		var row_error := _validate_row(row_data)
+		var row_error := _validate_row(row_data, answer)
 		if not row_error.is_empty():
 			return row_error
 	var solved_attempt := int(data["solved_attempt"])
@@ -287,7 +290,7 @@ func _validate_board(
 	return ""
 
 
-func _validate_row(data: Variant) -> String:
+func _validate_row(data: Variant, answer: String) -> String:
 	if typeof(data) != TYPE_DICTIONARY or not _has_keys(data, ["guess", "marks"]):
 		return "Ред покушаја није исправан."
 	if typeof(data["guess"]) != TYPE_STRING or not WordPool._is_valid_word(data["guess"]):
@@ -297,10 +300,18 @@ func _validate_row(data: Variant) -> String:
 	for mark in data["marks"]:
 		if not _is_integer(mark) or not [LetterMark.Value.ABSENT, LetterMark.Value.PRESENT, LetterMark.Value.CORRECT].has(int(mark)):
 			return "Оцена слова није исправна."
+	var expected_marks := GuessEvaluator.marks_for(data["guess"], answer)
+	for index in range(expected_marks.size()):
+		if int(data["marks"][index]) != int(expected_marks[index]):
+			return "Оцене слова нису у складу са покушајем и одговором."
 	return ""
 
 
-func _validate_bag(data: Dictionary, saved_fingerprint: String) -> String:
+func _validate_bag(
+	data: Dictionary,
+	saved_fingerprint: String,
+	active_answers: PackedStringArray,
+) -> String:
 	if not _has_keys(data, ["remaining_words", "pool_fingerprint"]):
 		return "Врећи одговора недостају обавезна поља."
 	if typeof(data["remaining_words"]) != TYPE_ARRAY or typeof(data["pool_fingerprint"]) != TYPE_STRING:
@@ -311,9 +322,42 @@ func _validate_bag(data: Dictionary, saved_fingerprint: String) -> String:
 	for word in data["remaining_words"]:
 		if typeof(word) != TYPE_STRING or not WordPool._is_valid_word(word) or seen.has(word):
 			return "Преостали одговор у врећи није исправан."
+		if active_answers.has(word):
+			return "Врећа одговора садржи активни одговор."
 		if saved_fingerprint == _pool.fingerprint() and not _pool.contains(word):
 			return "Преостали одговор није у тренутном речнику."
 		seen[word] = true
+	return ""
+
+
+func _validate_statistics_coherence(document: Dictionary) -> String:
+	var statistics_data: Dictionary = document["statistics"]
+	var recorded_ids: Array = statistics_data["recorded_session_ids"]
+	var total_records := 0
+	for score in range(Statistics.SCORE_BUCKET_COUNT):
+		var per_mode_total := 0
+		for mode in MODES:
+			per_mode_total += int(statistics_data["score_counts_by_mode"][str(mode)][score])
+		if per_mode_total != int(statistics_data["score_counts"][score]):
+			return "Укупна статистика није у складу са режимима."
+		total_records += per_mode_total
+	if total_records != recorded_ids.size():
+		return "Број забележених игара није у складу са статистиком."
+
+	for mode in MODES:
+		var session_data: Dictionary = document["bundle"]["sessions"][str(mode)]
+		var expected_id := _session_id(int(document["sequence"]), mode)
+		var has_record: bool = recorded_ids.has(expected_id)
+		if int(session_data["status"]) == GameSession.Status.ACTIVE and (session_data["statistics_recorded"] or has_record):
+			return "Активна сесија режима %d не сме бити забележена у статистици." % mode
+		if session_data["statistics_recorded"] != has_record:
+			return "Ознака статистике режима %d није у складу са забележеним играма." % mode
+		if has_record:
+			var expected_score := 0
+			if int(session_data["status"]) == GameSession.Status.WON:
+				expected_score = 6 + mode - int(session_data["attempt_index"])
+			if int(statistics_data["score_counts_by_mode"][str(mode)][expected_score]) < 1:
+				return "Резултат режима %d није у одговарајућој статистичкој групи." % mode
 	return ""
 
 

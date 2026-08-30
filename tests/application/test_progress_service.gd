@@ -14,6 +14,7 @@ func test_schema_one_round_trip_restores_every_persisted_field() -> void:
 	var solved: GameSession = service.bundle.sessions[1]
 	_submit(solved, solved.boards[0].answer, pool)
 	solved.statistics_recorded = true
+	assert_true(service.statistics.record(1, solved.score(), "bundle-17-mode-1"))
 	var partial: GameSession = service.bundle.sessions[2]
 	_type(partial, "АБ", pool)
 	var submitted: GameSession = service.bundle.sessions[4]
@@ -52,9 +53,11 @@ func test_schema_one_round_trip_restores_every_persisted_field() -> void:
 	assert_eq(restored.settings.get("theme"), LIGHT_THEME)
 	assert_true(restored.settings.get("reduced_motion"))
 	assert_true(restored.settings.get("onscreen_keyboard"))
-	assert_eq(restored.statistics.score_counts, PackedInt32Array([0, 0, 0, 1, 0, 0, 0]))
+	assert_eq(restored.statistics.score_counts, PackedInt32Array([0, 0, 0, 1, 0, 0, 1]))
+	assert_eq(restored.statistics.score_counts_by_mode[1], PackedInt32Array([0, 0, 0, 0, 0, 0, 1]))
 	assert_eq(restored.statistics.score_counts_by_mode[4], PackedInt32Array([0, 0, 0, 1, 0, 0, 0]))
 	assert_true(restored.statistics.recorded_session_ids.has("older-session"))
+	assert_true(restored.statistics.recorded_session_ids.has("bundle-17-mode-1"))
 	assert_eq(restored.bag.remaining_words, PackedStringArray(["БББББ", "ВВВВВ"]))
 	assert_eq(restored.bag.pool_fingerprint, pool.fingerprint())
 
@@ -107,7 +110,7 @@ func test_changed_fingerprint_reconciles_bag_without_reintroducing_active_answer
 	var old_service := _service(repository, old_pool)
 	old_service.load_or_create()
 	var active_answers := _active_answers(old_service.bundle)
-	old_service.bag.remaining_words = PackedStringArray([active_answers[0], "ААААА", "БББББ"])
+	old_service.bag.remaining_words = PackedStringArray(["ААААА", "БББББ"])
 	assert_eq(old_service.flush_now(), OK)
 	repository.reset_tracking()
 	var changed_entries := old_pool.answers()
@@ -149,6 +152,83 @@ func test_unrecorded_completed_restored_session_is_recorded_and_saved_once() -> 
 	assert_eq(repository.save_calls, 1)
 
 
+func test_recorded_terminal_session_without_matching_statistics_is_preserved_as_corrupt() -> void:
+	var repository := MemorySaveRepository.new()
+	var pool := _pool()
+	var service := _service(repository, pool)
+	service.load_or_create()
+	var session: GameSession = service.bundle.sessions[1]
+	_submit(session, session.boards[0].answer, pool)
+	session.statistics_recorded = true
+	assert_eq(service.flush_now(), OK)
+	var raw := repository.text
+	repository.reset_tracking()
+
+	var restored := _service(repository, pool).load_or_create()
+
+	assert_false(restored.restored)
+	assert_eq(repository.preserved_texts, [raw])
+	assert_eq(restored.statistics.score_counts, PackedInt32Array([0, 0, 0, 0, 0, 0, 0]))
+
+
+func test_statistics_counts_without_a_recorded_id_are_preserved_as_corrupt() -> void:
+	var document := _valid_document()
+	document["statistics"]["score_counts"][0] = 1
+	document["statistics"]["score_counts_by_mode"]["1"][0] = 1
+
+	_assert_recovers_from(JSON.stringify(document))
+
+
+func test_active_session_cannot_claim_a_coherent_statistics_record() -> void:
+	var document := _valid_document()
+	var session_id := "bundle-1-mode-1"
+	document["bundle"]["sessions"]["1"]["statistics_recorded"] = true
+	document["statistics"]["recorded_session_ids"].append(session_id)
+	document["statistics"]["score_counts"][0] = 1
+	document["statistics"]["score_counts_by_mode"]["1"][0] = 1
+
+	_assert_recovers_from(JSON.stringify(document))
+
+
+func test_recorded_terminal_session_score_bucket_must_match_its_score() -> void:
+	var repository := MemorySaveRepository.new()
+	var pool := _pool()
+	var service := _service(repository, pool)
+	service.load_or_create()
+	var session: GameSession = service.bundle.sessions[1]
+	_submit(session, session.boards[0].answer, pool)
+	session.statistics_recorded = true
+	assert_true(service.statistics.record(1, 0, "bundle-1-mode-1"))
+	assert_eq(service.flush_now(), OK)
+
+	_assert_recovers_from(repository.text)
+
+
+func test_semantically_false_row_marks_are_preserved_as_corrupt() -> void:
+	var repository := MemorySaveRepository.new()
+	var pool := _pool()
+	var service := _service(repository, pool)
+	service.load_or_create()
+	_submit(service.bundle.sessions[4], "ААААА", pool)
+	assert_eq(service.flush_now(), OK)
+	var document: Dictionary = JSON.parse_string(repository.text)
+	document["bundle"]["sessions"]["4"]["boards"][0]["rows"][0]["marks"] = [2, 2, 2, 2, 2]
+
+	_assert_recovers_from(JSON.stringify(document))
+
+
+func test_bag_overlap_with_active_answer_is_preserved_for_all_fingerprints() -> void:
+	for changed_fingerprint in [false, true]:
+		var document := _valid_document()
+		var active_answer: String = document["bundle"]["sessions"]["1"]["boards"][0]["answer"]
+		document["bag"]["remaining_words"].append(active_answer)
+		if changed_fingerprint:
+			document["pool_fingerprint"] = "changed-fingerprint"
+			document["bag"]["pool_fingerprint"] = "changed-fingerprint"
+
+		_assert_recovers_from(JSON.stringify(document))
+
+
 func test_typing_debounce_waits_for_point_three_five_seconds_after_latest_mutation() -> void:
 	var repository := MemorySaveRepository.new()
 	var service := _service(repository, _pool())
@@ -166,17 +246,19 @@ func test_typing_debounce_waits_for_point_three_five_seconds_after_latest_mutati
 	assert_false(service.dirty)
 
 
-func test_flush_now_persists_each_immediate_mutation_synchronously() -> void:
+func test_flush_now_is_the_synchronous_application_entry_point_even_when_not_dirty() -> void:
 	var repository := MemorySaveRepository.new()
 	var service := _service(repository, _pool())
 	service.load_or_create()
 	repository.reset_tracking()
 
-	for _trigger in ["submission", "completion", "settings", "bundle_reset"]:
-		service.mark_dirty()
-		assert_eq(service.flush_now(), OK)
+	assert_false(service.dirty)
+	service.settings.set("theme", LIGHT_THEME)
+	assert_eq(service.flush_now(), OK)
 
-	assert_eq(repository.save_calls, 4)
+	assert_eq(repository.save_calls, 1)
+	assert_eq(int(JSON.parse_string(repository.text)["settings"]["theme"]), LIGHT_THEME)
+	assert_false(service.dirty)
 
 
 func test_failed_debounced_save_stays_dirty_and_retries_after_next_mutation() -> void:
