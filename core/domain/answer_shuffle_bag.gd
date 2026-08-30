@@ -15,7 +15,7 @@ func draw(
 	assert(count >= 0)
 	var fingerprint := pool.fingerprint()
 	if pool_fingerprint != fingerprint:
-		_filter_remaining_words(pool)
+		_filter_remaining_words(pool, excluded)
 		pool_fingerprint = fingerprint
 
 	if remaining_words.size() < count:
@@ -27,11 +27,14 @@ func draw(
 	return selected
 
 
-func _filter_remaining_words(pool: WordPool) -> void:
+func _filter_remaining_words(pool: WordPool, excluded: PackedStringArray) -> void:
 	var filtered := PackedStringArray()
 	var seen: Dictionary = {}
+	var excluded_words: Dictionary = {}
+	for word in excluded:
+		excluded_words[word] = true
 	for word in remaining_words:
-		if pool.contains(word) and not seen.has(word):
+		if pool.contains(word) and not excluded_words.has(word) and not seen.has(word):
 			seen[word] = true
 			filtered.append(word)
 	remaining_words = filtered

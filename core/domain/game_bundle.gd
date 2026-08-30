@@ -9,12 +9,12 @@ enum Error {
 
 
 var sequence: int
-var sessions: Dictionary = {}
+var sessions: Dictionary[int, GameSession] = {}
 var error: int = Error.NONE
 var available_answer_count: int = 0
 
 
-func _init(bundle_sequence: int, mode_sessions: Dictionary = {}) -> void:
+func _init(bundle_sequence: int, mode_sessions: Dictionary[int, GameSession] = {}) -> void:
 	sequence = bundle_sequence
 	sessions = mode_sessions
 
