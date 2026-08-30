@@ -5,5 +5,5 @@ $ProjectPath = (Resolve-Path "$PSScriptRoot\..").ProviderPath
 if ($LASTEXITCODE -ne 0) {
 	exit $LASTEXITCODE
 }
-& $Godot --headless --path $ProjectPath -s res://addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
+& $Godot --headless --path $ProjectPath -s res://addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit
 exit $LASTEXITCODE
