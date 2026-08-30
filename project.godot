@@ -1,0 +1,41 @@
+; Engine configuration file.
+; It's best edited using the editor and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/name="Utera ti dechko"
+run/main_scene="res://app/app_root.tscn"
+
+[display/window]
+
+size/viewport_width=1440
+size/viewport_height=900
+size/window_width_override=1440
+size/window_height_override=900
+stretch/mode="canvas_items"
+stretch/aspect="expand"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
+
+[export]
+
+exclude_filter="addons/gut/*"
+
+[internationalization]
+
+locale/fallback="sr_Cyrl"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
