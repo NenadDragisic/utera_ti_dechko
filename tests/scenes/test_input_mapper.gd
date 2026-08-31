@@ -12,6 +12,11 @@ const EXPECTED_POSITION_MAP := {
 }
 
 
+func test_production_position_map_has_exactly_the_31_audited_entries() -> void:
+	assert_eq(InputMapper.LATIN_POSITION_MAP.size(), 31)
+	assert_eq(InputMapper.LATIN_POSITION_MAP, EXPECTED_POSITION_MAP)
+
+
 func test_all_31_physical_positions_map_to_the_reference_serbian_letters() -> void:
 	assert_eq(EXPECTED_POSITION_MAP.size(), 31)
 	for physical_keycode in EXPECTED_POSITION_MAP:

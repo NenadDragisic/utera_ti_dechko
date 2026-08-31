@@ -22,6 +22,10 @@ func test_launch_with_save_restores_bundle_settings_statistics_and_active_sessio
 	var repository := MemorySaveRepository.new()
 	var first := _context(repository)
 	first.coordinator.launch()
+	var completed: GameSession = first.coordinator.active_session()
+	_type_word(first.coordinator, completed.boards[0].answer)
+	assert_true(first.coordinator.submit())
+	assert_true(first.coordinator.switch_mode(2))
 	assert_true(first.coordinator.type_letter("А"))
 	first.coordinator.set_settings(Settings.ThemePreference.LIGHT, true, true)
 	var saved_bundle: GameBundle = first.coordinator.bundle
@@ -30,10 +34,18 @@ func test_launch_with_save_restores_bundle_settings_statistics_and_active_sessio
 	var restored: bool = second.coordinator.launch()
 
 	assert_true(restored)
-	assert_eq(second.coordinator.bundle.sessions[1].current_input, "А")
+	assert_eq(second.coordinator.bundle.sessions[1].status, GameSession.Status.WON)
+	assert_true(second.coordinator.bundle.sessions[1].statistics_recorded)
+	assert_eq(second.coordinator.bundle.sessions[2].current_input, "А")
 	assert_eq(second.coordinator.settings.theme, Settings.ThemePreference.LIGHT)
 	assert_true(second.coordinator.settings.reduced_motion)
 	assert_true(second.coordinator.settings.onscreen_keyboard)
+	assert_eq(second.coordinator.statistics.score_counts, PackedInt32Array([0, 0, 0, 0, 0, 0, 1]))
+	assert_eq(second.coordinator.statistics.score_counts_by_mode[1], PackedInt32Array([0, 0, 0, 0, 0, 0, 1]))
+	assert_eq(second.coordinator.statistics.score_counts_by_mode[2], PackedInt32Array([0, 0, 0, 0, 0, 0, 0]))
+	assert_eq(second.coordinator.statistics.score_counts_by_mode[4], PackedInt32Array([0, 0, 0, 0, 0, 0, 0]))
+	assert_eq(second.coordinator.statistics.score_counts_by_mode[8], PackedInt32Array([0, 0, 0, 0, 0, 0, 0]))
+	assert_eq(second.coordinator.statistics.recorded_session_ids, {"bundle-1-mode-1": true})
 	assert_ne(second.coordinator.bundle, saved_bundle)
 
 
@@ -209,6 +221,48 @@ func test_confirmed_bundle_reset_replaces_all_sessions_and_preserves_long_lived_
 	assert_eq(statistics.score_counts[6], 1)
 	assert_eq(repository.save_calls, 1)
 	assert_eq(states.size(), 1)
+
+
+func test_confirmed_reset_does_not_record_abandoned_unfinished_progress_as_a_loss() -> void:
+	var context := _launched_context()
+	var completed: GameSession = context.coordinator.active_session()
+	_type_word(context.coordinator, completed.boards[0].answer)
+	assert_true(context.coordinator.submit())
+	assert_true(context.coordinator.switch_mode(2))
+	var abandoned: GameSession = context.coordinator.active_session()
+	_type_word(context.coordinator, abandoned.boards[0].answer)
+	assert_true(context.coordinator.submit())
+	assert_eq(abandoned.status, GameSession.Status.ACTIVE)
+	assert_eq(abandoned.attempt_index, 1)
+	var old_sessions: Dictionary = context.coordinator.bundle.sessions.duplicate()
+	var pre_score_counts: PackedInt32Array = context.coordinator.statistics.score_counts.duplicate()
+	var pre_mode_counts: Dictionary = {}
+	for mode in MODES:
+		pre_mode_counts[mode] = context.coordinator.statistics.score_counts_by_mode[mode].duplicate()
+	var pre_recorded_ids: Dictionary = context.coordinator.statistics.recorded_session_ids.duplicate()
+	var confirmations: Array[int] = []
+	context.coordinator.confirmation_requested.connect(func() -> void: confirmations.append(1))
+
+	assert_false(context.coordinator.request_new_bundle())
+	assert_eq(confirmations.size(), 1)
+	assert_true(context.coordinator.confirm_new_bundle())
+
+	assert_eq(context.coordinator.bundle.sequence, 2)
+	for mode in MODES:
+		var fresh: GameSession = context.coordinator.bundle.sessions[mode]
+		assert_ne(fresh, old_sessions[mode])
+		assert_eq(fresh.status, GameSession.Status.ACTIVE)
+		assert_eq(fresh.attempt_index, 0)
+		assert_eq(fresh.current_input, "")
+	assert_eq(abandoned.status, GameSession.Status.ACTIVE)
+	assert_false(abandoned.statistics_recorded)
+	assert_eq(context.coordinator.statistics.score_counts, pre_score_counts)
+	for mode in MODES:
+		assert_eq(context.coordinator.statistics.score_counts_by_mode[mode], pre_mode_counts[mode])
+	assert_eq(context.coordinator.statistics.recorded_session_ids, pre_recorded_ids)
+	assert_eq(context.coordinator.statistics.score_counts[0], 0)
+	assert_eq(context.coordinator.statistics.recorded_session_ids.size(), 1)
+	assert_false(context.coordinator.statistics.recorded_session_ids.has("bundle-1-mode-2"))
 
 
 func test_request_new_bundle_resets_without_confirmation_when_no_unfinished_progress_exists() -> void:
