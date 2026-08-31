@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://app/app_root.gd" id="1_6c7ww"]
+[ext_resource type="Theme" path="res://app/app_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://features/common/notice_banner.tscn" id="3_notice"]
 
 [node name="AppRoot" type="Control"]
 layout_mode = 3
@@ -9,4 +11,74 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_6c7ww")
+
+[node name="Background" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_type_variation = &"BackgroundPanel"
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="Layout" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="SafeArea/Layout"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+alignment = 1
+
+[node name="Title" type="Label" parent="SafeArea/Layout/Header"]
+layout_mode = 2
+theme_type_variation = &"AppTitle"
+text = "УТЕРА ТИ ДЕЧКО"
+vertical_alignment = 1
+
+[node name="HeaderSpacer" type="Control" parent="SafeArea/Layout/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ScreenContainer" type="Control" parent="SafeArea/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Footer" type="HBoxContainer" parent="SafeArea/Layout"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+alignment = 2
+
+[node name="Attribution" type="Label" parent="SafeArea/Layout/Footer"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Ставља у погон: ПрслаФабрика"
+vertical_alignment = 2
+
+[node name="FooterSpacer" type="Control" parent="SafeArea/Layout/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewGameButton" type="Button" parent="SafeArea/Layout/Footer"]
+custom_minimum_size = Vector2(132, 44)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "НОВА ИГРА"
+
+[node name="NoticeBanner" parent="." instance=ExtResource("3_notice")]
+layout_mode = 1
