@@ -62,6 +62,13 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_modes")
 text = "8"
 
+[node name="Navigator" type="HBoxContainer" parent="Layout"]
+visible = false
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
 [node name="BoardsScroll" type="ScrollContainer" parent="Layout"]
 layout_mode = 2
 size_flags_vertical = 3

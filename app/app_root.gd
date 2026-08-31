@@ -19,6 +19,7 @@ var save_repository_override: SaveRepositoryPort
 var random_source: GodotRandomSource
 var clipboard: GodotClipboardAdapter
 var platform_capabilities: PlatformCapabilities
+var platform_capabilities_override: PlatformCapabilities
 var session_factory: SessionFactory
 var progress_service: ProgressService
 var share_service: ShareService
@@ -32,6 +33,7 @@ var current_screen: Control
 
 func _ready() -> void:
 	set_process_unhandled_key_input(true)
+	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	_new_game_button.pressed.connect(_on_new_game_pressed)
 	word_repository = BazaWordRepository.new()
 	var pool := word_repository.load_pool()
@@ -59,6 +61,8 @@ func start(pool: WordPool, pool_error: String = "") -> void:
 	random_source = GodotRandomSource.new()
 	clipboard = GodotClipboardAdapter.new()
 	platform_capabilities = PlatformCapabilities.new()
+	if platform_capabilities_override != null:
+		platform_capabilities = platform_capabilities_override
 	session_factory = SessionFactory.new(random_source)
 	progress_service = ProgressService.new(save_repository, pool, session_factory)
 	share_service = ShareService.new(clipboard)
@@ -109,6 +113,7 @@ func _show_game() -> void:
 	# A HomeScreen button signal is still executing while this route changes.
 	# Queueing only that outgoing screen avoids freeing a signal-locked object.
 	set_screen(game, true)
+	game.set_mobile_layout(platform_capabilities.is_mobile_layout(get_viewport_rect().size))
 
 
 func _show_fatal_startup(pool: WordPool, detail: String) -> void:
@@ -222,3 +227,10 @@ func _on_new_game_pressed() -> void:
 
 func _on_confirmation_requested() -> void:
 	new_game_confirmation_requested.emit()
+
+
+func _on_viewport_size_changed() -> void:
+	if platform_capabilities == null or not current_screen is GameScreen:
+		return
+	var game := current_screen as GameScreen
+	game.set_mobile_layout(platform_capabilities.is_mobile_layout(get_viewport_rect().size))
