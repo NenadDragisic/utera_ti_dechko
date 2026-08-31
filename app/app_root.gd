@@ -9,6 +9,7 @@ signal new_game_confirmation_requested
 
 
 const HOME_SCREEN_SCENE := preload("res://features/home/home_screen.tscn")
+const GAME_SCREEN_SCENE := preload("res://features/gameplay/game_screen.tscn")
 const REQUIRED_ANSWER_COUNT := SessionFactory.BUNDLE_ANSWER_COUNT
 
 
@@ -78,10 +79,13 @@ func start(pool: WordPool, pool_error: String = "") -> void:
 		_notice_banner.show_message(platform_warning)
 
 
-func set_screen(screen: Control) -> void:
+func set_screen(screen: Control, defer_previous_free: bool = false) -> void:
 	if current_screen != null:
 		_screen_container.remove_child(current_screen)
-		current_screen.free()
+		if defer_previous_free:
+			current_screen.queue_free()
+		else:
+			current_screen.free()
 	current_screen = screen
 	_screen_container.add_child(current_screen)
 	current_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -94,6 +98,17 @@ func _show_home() -> void:
 	home.settings_requested.connect(_on_settings_requested)
 	home.combined_share_requested.connect(_on_combined_share_requested)
 	set_screen(home)
+
+
+func _show_game() -> void:
+	var game: GameScreen = GAME_SCREEN_SCENE.instantiate()
+	game.letter_typed.connect(_on_game_letter_typed)
+	game.erase_requested.connect(_on_game_erase_requested)
+	game.submit_requested.connect(_on_game_submit_requested)
+	game.mode_selected.connect(_on_game_mode_selected)
+	# A HomeScreen button signal is still executing while this route changes.
+	# Queueing only that outgoing screen avoids freeing a signal-locked object.
+	set_screen(game, true)
 
 
 func _show_fatal_startup(pool: WordPool, detail: String) -> void:
@@ -116,10 +131,21 @@ func _show_fatal_startup(pool: WordPool, detail: String) -> void:
 
 
 func _on_state_changed() -> void:
-	if coordinator == null or not current_screen is HomeScreen:
+	if coordinator == null:
 		return
-	var home := current_screen as HomeScreen
-	home.render(coordinator.active_mode, _mode_summaries())
+	if current_screen is HomeScreen:
+		var home := current_screen as HomeScreen
+		home.render(coordinator.active_mode, _mode_summaries())
+	elif current_screen is GameScreen:
+		_render_game_screen()
+
+
+func _render_game_screen() -> void:
+	if coordinator == null or not current_screen is GameScreen:
+		return
+	var game := current_screen as GameScreen
+	var reduced_motion := coordinator.settings != null and coordinator.settings.reduced_motion
+	game.render(coordinator.active_session(), coordinator.active_mode, reduced_motion)
 
 
 func _mode_summaries() -> Dictionary:
@@ -140,9 +166,35 @@ func _mode_summaries() -> Dictionary:
 func _on_mode_selected(mode: int) -> void:
 	if coordinator == null:
 		return
-	if coordinator.active_mode != mode and not coordinator.switch_mode(mode):
-		return
+	_show_game()
+	if coordinator.active_mode != mode:
+		if not coordinator.switch_mode(mode):
+			_show_home()
+			_on_state_changed()
+			return
+	else:
+		_render_game_screen()
 	game_requested.emit(mode)
+
+
+func _on_game_letter_typed(letter: String) -> void:
+	if coordinator != null:
+		coordinator.type_letter(letter)
+
+
+func _on_game_erase_requested() -> void:
+	if coordinator != null:
+		coordinator.erase()
+
+
+func _on_game_submit_requested() -> void:
+	if coordinator != null:
+		coordinator.submit()
+
+
+func _on_game_mode_selected(mode: int) -> void:
+	if coordinator != null:
+		coordinator.switch_mode(mode)
 
 
 func _on_statistics_requested() -> void:

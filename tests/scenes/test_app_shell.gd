@@ -57,6 +57,7 @@ func test_shell_starts_real_dependencies_and_routes_home_mode_intent() -> void:
 
 	watch_signals(root)
 	root.current_screen.get_node("Center/Content/ModeCards/Mode4").pressed.emit()
+	await get_tree().process_frame
 	assert_eq(root.coordinator.active_mode, 4)
 	assert_signal_emitted_with_parameters(root, "game_requested", [4])
 
