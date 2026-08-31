@@ -26,6 +26,7 @@ var _reduced_motion: bool = false
 var _keyboard_view: KeyboardView
 var _touch_start := Vector2.ZERO
 var _tracked_touch_index: int = -1
+var _active_row_reveal_queued: bool = false
 
 @onready var _board_center: CenterContainer = $Layout/BoardsScroll/BoardCenter
 @onready var _boards_grid: GridContainer = $Layout/BoardsScroll/BoardCenter/BoardsGrid
@@ -38,6 +39,7 @@ func _ready() -> void:
 	for mode in MODES:
 		_mode_button(mode).pressed.connect(mode_selected.emit.bind(mode))
 	_boards_scroll.gui_input.connect(_on_focus_gui_input)
+	_boards_scroll.resized.connect(_on_board_viewport_resized)
 	resized.connect(_on_resized)
 
 
@@ -287,3 +289,15 @@ func _on_board_gui_input(event: InputEvent, index: int) -> void:
 func _on_resized() -> void:
 	if _boards_grid != null:
 		layout_for_width(size.x)
+
+
+func _on_board_viewport_resized() -> void:
+	if not mobile_layout or _active_row_reveal_queued:
+		return
+	_active_row_reveal_queued = true
+	get_tree().process_frame.connect(_reveal_active_row_after_layout, CONNECT_ONE_SHOT)
+
+
+func _reveal_active_row_after_layout() -> void:
+	_active_row_reveal_queued = false
+	_reveal_active_row()

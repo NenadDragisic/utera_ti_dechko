@@ -162,6 +162,28 @@ func test_narrow_touch_web_reclassifies_layout_after_orientation_change() -> voi
 	assert_false(root.current_screen.get_node("Layout").has_node("KeyboardView"))
 
 
+func test_android_rotation_reveals_progressed_active_row_after_viewport_shrinks() -> void:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(390, 844)
+	add_child_autofree(viewport)
+	var root: Control = load("res://app/app_root.tscn").instantiate()
+	root.save_repository_override = MemorySaveRepository.new()
+	root.platform_capabilities_override = FakePlatformCapabilities.new("Android", false)
+	viewport.add_child(root)
+	var session := _progressed_session()
+	root.coordinator.bundle.sessions[8] = session
+	root.current_screen.get_node("Center/Content/ModeCards/Mode8").pressed.emit()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var screen: GameScreen = root.current_screen
+	assert_true(_active_row_is_visible(screen, session), "portrait setup")
+
+	viewport.size = Vector2i(844, 390)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_true(_active_row_is_visible(screen, session), "landscape after rotation")
+
+
 func _mobile_screen(viewport_size: Vector2) -> Control:
 	var screen := _screen(viewport_size)
 	if screen != null:
@@ -203,6 +225,34 @@ func _submit(session: GameSession, guess: String, entries: PackedStringArray) ->
 	for letter in guess:
 		session.type_letter(letter, pool)
 	assert_true(session.submit(pool))
+
+
+func _progressed_session() -> GameSession:
+	var answers := _answers(8)
+	var guesses := PackedStringArray([
+		"ЗЗЗЗЗ", "ИИИИИ", "ЈЈЈЈЈ", "ККККК",
+		"ЛЛЛЛЛ", "ЉЉЉЉЉ", "МММММ", "ННННН",
+	])
+	var entries := answers.duplicate()
+	entries.append_array(guesses)
+	var session := GameSession.create(answers)
+	for guess in guesses:
+		_submit(session, guess, entries)
+	return session
+
+
+func _active_row_is_visible(screen: GameScreen, session: GameSession) -> bool:
+	var scroll: ScrollContainer = screen.get_node("Layout/BoardsScroll")
+	var cell: Control = screen.get_node(
+		"Layout/BoardsScroll/BoardCenter/BoardsGrid/Board%d/Content/Cells/Cell_%d_0"
+		% [screen.selected_board_index, session.attempt_index]
+	)
+	var scroll_rect := scroll.get_global_rect()
+	var cell_rect := cell.get_global_rect()
+	return (
+		cell_rect.position.y >= scroll_rect.position.y - 0.5
+		and cell_rect.end.y <= scroll_rect.end.y + 0.5
+	)
 
 
 func _answers(count: int) -> PackedStringArray:
