@@ -106,6 +106,18 @@ func test_notice_banner_reports_copy_without_blocking_pointer_input() -> void:
 	var dismiss: Button = banner.get_node("TopMargin/Panel/Layout/DismissButton")
 	assert_gte(dismiss.custom_minimum_size.x, 44.0)
 	assert_gte(dismiss.custom_minimum_size.y, 44.0)
+	banner.show_message("Трајно чување није доступно.")
+	banner.show_message("Трајно чување није доступно.")
+	assert_eq(
+		banner.get_node("TopMargin/Panel/Layout/Message").text,
+		"Напредак није сачуван.",
+	)
+	dismiss.pressed.emit()
+	assert_true(banner.visible)
+	assert_eq(
+		banner.get_node("TopMargin/Panel/Layout/Message").text,
+		"Трајно чување није доступно.",
+	)
 	dismiss.pressed.emit()
 	assert_false(banner.visible)
 

@@ -19,6 +19,9 @@ const CONFIRM_NEW_GAME_DIALOG_SCENE := preload(
 const DARK_THEME := preload("res://app/app_theme.tres")
 const LIGHT_THEME := preload("res://app/app_theme_light.tres")
 const REQUIRED_ANSWER_COUNT := SessionFactory.BUNDLE_ANSWER_COUNT
+const SAVE_RETRY_NOTICE := (
+	"Напредак није сачуван. Аутоматски ћемо покушати поново."
+)
 
 
 var word_repository: BazaWordRepository
@@ -60,9 +63,7 @@ func _process(delta: float) -> void:
 			and progress_service.last_error != _last_reported_save_error
 		):
 			_last_reported_save_error = progress_service.last_error
-			_notice_banner.show_message(
-				"Напредак није сачуван. Покушаћемо поново после следеће измене."
-			)
+			_notice_banner.show_message(SAVE_RETRY_NOTICE)
 		elif progress_service.last_error == OK:
 			_last_reported_save_error = OK
 
@@ -105,7 +106,8 @@ func _handle_back() -> void:
 
 
 func start(pool: WordPool, pool_error: String = "") -> void:
-	_notice_banner.dismiss()
+	_notice_banner.clear()
+	_set_shell_actions_enabled(true)
 	coordinator = null
 	progress_service = null
 	share_service = null
@@ -231,6 +233,15 @@ func _show_fatal_startup(pool: WordPool, detail: String) -> void:
 	message.accessibility_name = "Критична грешка при покретању. %s" % message.text
 	fatal.add_child(message)
 	set_screen(fatal)
+	_set_shell_actions_enabled(false)
+
+
+func _set_shell_actions_enabled(enabled: bool) -> void:
+	var footer: Control = get_node("SafeArea/Layout/Footer") as Control
+	footer.visible = enabled
+	_new_game_button.visible = enabled
+	_new_game_button.disabled = not enabled
+	_new_game_button.focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
 
 
 func _on_state_changed() -> void:
@@ -432,9 +443,7 @@ func _on_combined_share_requested() -> void:
 func _on_notice_requested(message: String) -> void:
 	if message.begins_with("Напредак није сачуван"):
 		_last_reported_save_error = progress_service.last_error if progress_service != null else OK
-		_notice_banner.show_message(
-			"Напредак није сачуван. Покушаћемо поново после следеће измене."
-		)
+		_notice_banner.show_message(SAVE_RETRY_NOTICE)
 		return
 	_notice_banner.show_message(message)
 

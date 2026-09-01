@@ -48,6 +48,30 @@ func test_empty_and_insufficient_word_pools_replace_playable_content_with_safe_f
 		assert_false(message.contains("STACK TRACE"))
 
 
+func test_fatal_startup_hides_disables_and_defocuses_every_shell_action() -> void:
+	var root := _root(MemorySaveRepository.new())
+	if root == null:
+		return
+	var old_button: Button = root.get_node(
+		"SafeArea/Layout/Footer/NewGameButton"
+	)
+	root.start(WordPool.from_entries(PackedStringArray()), "")
+	var fatal_screen: Control = root.current_screen
+	watch_signals(root)
+
+	assert_eq(fatal_screen.name, "FatalStartup")
+	assert_false(root.get_node("SafeArea/Layout/Footer").visible)
+	assert_false(old_button.visible)
+	assert_true(old_button.disabled)
+	assert_eq(old_button.focus_mode, Control.FOCUS_NONE)
+	assert_eq(_visible_actionable_controls(root), [])
+
+	old_button.pressed.emit()
+	assert_same(root.current_screen, fatal_screen)
+	assert_null(root.coordinator)
+	assert_signal_not_emitted(root, "new_game_confirmation_requested")
+
+
 func test_corrupt_save_is_preserved_while_a_fresh_playable_bundle_shows_a_dismissible_notice() -> void:
 	var raw := "{\"answer\":\"SECRET ANSWER\",\"stack\":\"STACK TRACE\""
 	var repository := MemorySaveRepository.new(raw)
@@ -68,6 +92,33 @@ func test_corrupt_save_is_preserved_while_a_fresh_playable_bundle_shows_a_dismis
 	assert_true(root.current_screen is HomeScreen)
 
 
+func test_corrupt_web_launch_presents_recovery_then_durability_without_raw_bytes() -> void:
+	var raw := "{\"answer\":\"SECRET ANSWER\",\"stack\":\"STACK TRACE\""
+	var repository := MemorySaveRepository.new(raw)
+	var root := _root(
+		repository,
+		FakePlatformCapabilities.new("Web", true),
+	)
+	if root == null:
+		return
+
+	assert_true(root.current_screen is HomeScreen)
+	assert_true(root.coordinator.bundle.is_valid())
+	assert_eq(repository.preserved_texts, [raw])
+	assert_true(root.get_node("NoticeBanner").visible)
+	assert_string_contains(_notice_text(root), "Сачувани напредак")
+	assert_false(_notice_text(root).contains("SECRET ANSWER"))
+	assert_false(_notice_text(root).contains("STACK TRACE"))
+
+	root.get_node("NoticeBanner").dismiss()
+	assert_true(root.get_node("NoticeBanner").visible)
+	assert_string_contains(_notice_text(root).to_lower(), "веб прегледачу")
+	assert_false(_notice_text(root).contains("SECRET ANSWER"))
+	assert_false(_notice_text(root).contains("STACK TRACE"))
+	root.get_node("NoticeBanner").dismiss()
+	assert_false(root.get_node("NoticeBanner").visible)
+
+
 func test_save_web_persistence_and_clipboard_failures_preserve_playable_state_with_fallbacks() -> void:
 	var saves := MemorySaveRepository.new()
 	var web_root := _root(
@@ -85,14 +136,20 @@ func test_save_web_persistence_and_clipboard_failures_preserve_playable_state_wi
 	assert_true(web_root.coordinator.set_settings(Settings.ThemePreference.DARK, true, false))
 	assert_true(web_root.current_screen is HomeScreen)
 	assert_true(web_root.get_node("NoticeBanner").visible)
-	assert_string_contains(_notice_text(web_root).to_lower(), "није сачуван")
+	assert_eq(
+		_notice_text(web_root),
+		"Напредак није сачуван. Аутоматски ћемо покушати поново.",
+	)
 	web_root.get_node("NoticeBanner").dismiss()
 	saves.next_save_error = ERR_FILE_CANT_WRITE
 	assert_true(web_root.coordinator.type_letter("А"))
 	web_root._process(ProgressService.DEBOUNCE_SECONDS)
 	assert_true(web_root.current_screen is HomeScreen)
 	assert_true(web_root.get_node("NoticeBanner").visible)
-	assert_string_contains(_notice_text(web_root).to_lower(), "није сачуван")
+	assert_eq(
+		_notice_text(web_root),
+		"Напредак није сачуван. Аутоматски ћемо покушати поново.",
+	)
 
 	var clipboard := FakeClipboard.new()
 	clipboard.next_result = false
@@ -336,6 +393,19 @@ func _all_accessibility_names(node: Node) -> String:
 		result += node.accessibility_name + "\n"
 	for child in node.get_children():
 		result += _all_accessibility_names(child)
+	return result
+
+
+func _visible_actionable_controls(node: Node) -> Array[Control]:
+	var result: Array[Control] = []
+	if (
+		node is BaseButton
+		and node.is_visible_in_tree()
+		and not (node as BaseButton).disabled
+	):
+		result.append(node as Control)
+	for child in node.get_children():
+		result.append_array(_visible_actionable_controls(child))
 	return result
 
 

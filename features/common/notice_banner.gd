@@ -7,6 +7,7 @@ signal dismissed
 
 var _message_label: Label
 var _dismiss_button: Button
+var _queued_messages: Array[String] = []
 
 
 func _ready() -> void:
@@ -30,8 +31,23 @@ func _configure() -> void:
 func show_message(message: String) -> void:
 	_configure()
 	if message.is_empty():
-		dismiss()
+		clear()
 		return
+	if visible:
+		if message == _message_label.text or _queued_messages.has(message):
+			return
+		_queued_messages.append(message)
+		return
+	_present(message)
+
+
+func clear() -> void:
+	_queued_messages.clear()
+	visible = false
+	accessibility_name = ""
+
+
+func _present(message: String) -> void:
 	_message_label.text = message
 	accessibility_name = "Обавештење: %s" % message
 	visible = true
@@ -40,5 +56,9 @@ func show_message(message: String) -> void:
 func dismiss() -> void:
 	if not visible:
 		return
-	visible = false
 	dismissed.emit()
+	if not _queued_messages.is_empty():
+		_present(_queued_messages.pop_front())
+		return
+	visible = false
+	accessibility_name = ""
