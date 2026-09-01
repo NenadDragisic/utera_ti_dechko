@@ -89,11 +89,20 @@ func test_app_root_applies_system_dark_light_reduced_motion_and_keyboard_immedia
 	assert_true(root.coordinator.settings.onscreen_keyboard)
 	root.current_screen.get_node("Center/Content/HomeButton").pressed.emit()
 	await get_tree().process_frame
-	root.current_screen.get_node("Center/Content/ModeCards/Mode1").pressed.emit()
+	root.current_screen.get_node("Center/Content/ModeCards/Mode8").pressed.emit()
 	await get_tree().process_frame
 	assert_true(root.current_screen._reduced_motion)
-	assert_true(root.current_screen.mobile_layout)
+	assert_false(root.current_screen.mobile_layout)
 	assert_true(root.current_screen.has_node("Layout/KeyboardView"))
+	assert_false(root.current_screen.get_node("Layout/Navigator").visible)
+	assert_eq(root.current_screen.board_columns, 4)
+	var visible_boards := 0
+	for board in root.current_screen.get_node(
+		"Layout/BoardsScroll/BoardCenter/BoardsGrid"
+	).get_children():
+		if board.visible:
+			visible_boards += 1
+	assert_eq(visible_boards, 8)
 
 
 func test_reset_dialog_copy_and_signals_make_cancel_and_confirm_explicit() -> void:

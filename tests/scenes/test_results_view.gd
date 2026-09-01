@@ -81,14 +81,20 @@ func test_clipboard_failure_keeps_selectable_share_text_and_manual_guidance_visi
 	if view == null:
 		return
 	view.show_share_fallback("УТЕРА ТИ ДЕЧКО #5\n⬛⬛⬛⬛⬛")
+	await get_tree().process_frame
 
 	var panel: Control = view.get_node("Center/Content/ShareFallback")
-	var text: TextEdit = panel.get_node("ShareText")
+	var layout: VBoxContainer = panel.get_node("FallbackLayout")
+	var guidance: Label = layout.get_node("Guidance")
+	var text: TextEdit = layout.get_node("ShareText")
 	assert_true(panel.visible)
+	assert_same(guidance.get_parent(), layout)
+	assert_same(text.get_parent(), layout)
+	assert_lte(guidance.global_position.y + guidance.size.y, text.global_position.y)
 	assert_false(text.editable)
 	assert_true(text.selecting_enabled)
 	assert_eq(text.text, "УТЕРА ТИ ДЕЧКО #5\n⬛⬛⬛⬛⬛")
-	assert_string_contains(panel.get_node("Guidance").text.to_lower(), "ручно")
+	assert_string_contains(guidance.text.to_lower(), "ручно")
 
 	view.show_copy_success()
 	assert_false(panel.visible)
@@ -112,7 +118,9 @@ func test_app_root_routes_terminal_session_to_results_and_failed_copy_to_fallbac
 	root.current_screen.get_node("Center/Content/ShareButton").pressed.emit()
 	assert_true(root.current_screen.get_node("Center/Content/ShareFallback").visible)
 	assert_eq(
-		root.current_screen.get_node("Center/Content/ShareFallback/ShareText").text,
+		root.current_screen.get_node(
+			"Center/Content/ShareFallback/FallbackLayout/ShareText"
+		).text,
 		clipboard.copied_text,
 	)
 
@@ -128,11 +136,19 @@ func test_combined_clipboard_failure_also_opens_selectable_manual_fallback() -> 
 	root.current_screen.get_node("Center/Content/Actions/ShareButton").pressed.emit()
 	await get_tree().process_frame
 
-	assert_true(root.current_screen is ResultsView)
+	assert_true(root.current_screen is HomeScreen)
 	var fallback: Control = root.current_screen.get_node("Center/Content/ShareFallback")
 	assert_true(fallback.visible)
-	assert_eq(fallback.get_node("ShareText").text, clipboard.copied_text)
-	assert_string_contains(fallback.get_node("Guidance").text.to_lower(), "ручно")
+	assert_eq(
+		fallback.get_node("FallbackLayout/ShareText").text,
+		clipboard.copied_text,
+	)
+	assert_string_contains(
+		fallback.get_node("FallbackLayout/Guidance").text.to_lower(),
+		"ручно",
+	)
+	assert_false(_tree_contains_name(root.current_screen, "Score"))
+	assert_false(_tree_contains_name(root.current_screen, "Answers"))
 
 
 func _instantiate_results_view() -> Control:
@@ -170,3 +186,12 @@ func _signal_named(object: Object, signal_name: String) -> Dictionary:
 		if signal_info.name == signal_name:
 			return signal_info
 	return {}
+
+
+func _tree_contains_name(node: Node, node_name: String) -> bool:
+	if node.name == node_name:
+		return true
+	for child in node.get_children():
+		if _tree_contains_name(child, node_name):
+			return true
+	return false

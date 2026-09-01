@@ -20,6 +20,7 @@ const SWIPE_THRESHOLD := 48.0
 var board_columns: int = 1
 var selected_board_index: int = 0
 var mobile_layout: bool = false
+var onscreen_keyboard: bool = false
 
 var _session: GameSession
 var _reduced_motion: bool = false
@@ -66,29 +67,40 @@ func render(session: GameSession, active_mode: int, reduced_motion: bool = false
 
 
 func set_mobile_layout(value: bool) -> void:
-	if mobile_layout == value and (_keyboard_view != null) == value:
+	if mobile_layout == value:
 		return
 	mobile_layout = value
-	if mobile_layout:
-		if _keyboard_view == null:
-			_keyboard_view = KEYBOARD_VIEW_SCENE.instantiate() as KeyboardView
-			_keyboard_view.name = "KeyboardView"
-			_keyboard_view.set_reduced_motion(_reduced_motion)
-			_keyboard_view.set_collapsed(true)
-			_keyboard_view.letter_pressed.connect(letter_typed.emit)
-			_keyboard_view.erase_pressed.connect(erase_requested.emit)
-			_keyboard_view.submit_pressed.connect(submit_requested.emit)
-			_keyboard_view.collapsed_changed.connect(_on_keyboard_collapsed_changed)
-			$Layout.add_child(_keyboard_view)
-			if _session != null:
-				_keyboard_view.render(_session)
-	else:
-		if _keyboard_view != null:
-			$Layout.remove_child(_keyboard_view)
-			_keyboard_view.free()
-			_keyboard_view = null
+	_sync_keyboard_visibility()
 	_refresh_mobile_presentation()
 	layout_for_width(size.x if size.x > 0.0 else 1440.0)
+
+
+func set_onscreen_keyboard(value: bool) -> void:
+	if onscreen_keyboard == value:
+		return
+	onscreen_keyboard = value
+	_sync_keyboard_visibility()
+	layout_for_width(size.x if size.x > 0.0 else 1440.0)
+
+
+func _sync_keyboard_visibility() -> void:
+	var should_show := mobile_layout or onscreen_keyboard
+	if should_show and _keyboard_view == null:
+		_keyboard_view = KEYBOARD_VIEW_SCENE.instantiate() as KeyboardView
+		_keyboard_view.name = "KeyboardView"
+		_keyboard_view.set_reduced_motion(_reduced_motion)
+		_keyboard_view.set_collapsed(true)
+		_keyboard_view.letter_pressed.connect(letter_typed.emit)
+		_keyboard_view.erase_pressed.connect(erase_requested.emit)
+		_keyboard_view.submit_pressed.connect(submit_requested.emit)
+		_keyboard_view.collapsed_changed.connect(_on_keyboard_collapsed_changed)
+		$Layout.add_child(_keyboard_view)
+		if _session != null:
+			_keyboard_view.render(_session)
+	elif not should_show and _keyboard_view != null:
+		$Layout.remove_child(_keyboard_view)
+		_keyboard_view.free()
+		_keyboard_view = null
 
 
 func select_board(index: int) -> void:

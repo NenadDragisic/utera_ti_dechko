@@ -128,9 +128,9 @@ func _show_game() -> void:
 	# A HomeScreen button signal is still executing while this route changes.
 	# Queueing only that outgoing screen avoids freeing a signal-locked object.
 	set_screen(game, true)
-	var onscreen_keyboard := coordinator != null and coordinator.settings.onscreen_keyboard
-	game.set_mobile_layout(
-		platform_capabilities.is_mobile_layout(get_viewport_rect().size) or onscreen_keyboard
+	game.set_mobile_layout(platform_capabilities.is_mobile_layout(get_viewport_rect().size))
+	game.set_onscreen_keyboard(
+		coordinator != null and coordinator.settings.onscreen_keyboard
 	)
 
 
@@ -233,10 +233,8 @@ func _apply_settings_preferences() -> void:
 	theme = _theme_for_preference(coordinator.settings.theme)
 	if current_screen is GameScreen and platform_capabilities != null:
 		var game := current_screen as GameScreen
-		game.set_mobile_layout(
-			platform_capabilities.is_mobile_layout(get_viewport_rect().size)
-			or coordinator.settings.onscreen_keyboard
-		)
+		game.set_mobile_layout(platform_capabilities.is_mobile_layout(get_viewport_rect().size))
+		game.set_onscreen_keyboard(coordinator.settings.onscreen_keyboard)
 
 
 func _theme_for_preference(preference: Settings.ThemePreference) -> Theme:
@@ -359,23 +357,15 @@ func _on_settings_home_requested() -> void:
 
 
 func _on_combined_share_requested() -> void:
-	if coordinator == null or share_service == null:
+	if coordinator == null or share_service == null or not current_screen is HomeScreen:
 		return
 	var share_text := share_service.combined_text(coordinator.bundle)
+	var home := current_screen as HomeScreen
 	if share_service.copy(share_text):
+		home.show_copy_success()
 		_notice_banner.show_message("Резултат је копиран.")
 	else:
-		_show_manual_share(share_text)
-
-
-func _show_manual_share(text: String) -> void:
-	var results: ResultsView = RESULTS_VIEW_SCENE.instantiate()
-	results.copy_requested.connect(_on_result_copy_requested)
-	results.mode_selected.connect(_on_result_mode_selected)
-	results.home_requested.connect(_on_result_home_requested)
-	set_screen(results, true)
-	results.render(null, coordinator.active_mode, "")
-	results.show_share_fallback(text)
+		home.show_share_fallback(share_text)
 
 
 func _on_new_game_pressed() -> void:
@@ -418,7 +408,7 @@ func _on_viewport_size_changed() -> void:
 	if platform_capabilities == null or not current_screen is GameScreen:
 		return
 	var game := current_screen as GameScreen
-	var onscreen_keyboard := coordinator != null and coordinator.settings.onscreen_keyboard
-	game.set_mobile_layout(
-		platform_capabilities.is_mobile_layout(get_viewport_rect().size) or onscreen_keyboard
+	game.set_mobile_layout(platform_capabilities.is_mobile_layout(get_viewport_rect().size))
+	game.set_onscreen_keyboard(
+		coordinator != null and coordinator.settings.onscreen_keyboard
 	)

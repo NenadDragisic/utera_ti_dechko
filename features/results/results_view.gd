@@ -46,7 +46,7 @@ func render(session: GameSession, active_mode: int, share_text: String) -> void:
 
 
 func show_share_fallback(text: String) -> void:
-	var share_text: TextEdit = _share_fallback.get_node("ShareText")
+	var share_text: TextEdit = _share_fallback.get_node("FallbackLayout/ShareText")
 	share_text.text = text
 	_share_fallback.visible = true
 	share_text.select_all()

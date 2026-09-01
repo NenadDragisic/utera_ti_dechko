@@ -67,12 +67,12 @@ layout_mode = 2
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Guidance" type="Label" parent="Center/Content/ShareFallback"]
+[node name="Guidance" type="Label" parent="Center/Content/ShareFallback/FallbackLayout"]
 layout_mode = 2
 text = "Копирање није доступно. Означите текст и копирајте га ручно."
 autowrap_mode = 2
 
-[node name="ShareText" type="TextEdit" parent="Center/Content/ShareFallback"]
+[node name="ShareText" type="TextEdit" parent="Center/Content/ShareFallback/FallbackLayout"]
 custom_minimum_size = Vector2(0, 112)
 layout_mode = 2
 editable = false

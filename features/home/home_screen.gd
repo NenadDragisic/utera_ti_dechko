@@ -11,6 +11,9 @@ signal combined_share_requested
 const MODES := [1, 2, 4, 8]
 
 
+@onready var _share_fallback: PanelContainer = $Center/Content/ShareFallback
+
+
 func _ready() -> void:
 	for mode in MODES:
 		_mode_button(mode).pressed.connect(_on_mode_pressed.bind(mode))
@@ -25,6 +28,17 @@ func render(active_mode: int, summaries: Dictionary) -> void:
 		button.button_pressed = mode == active_mode
 		button.tooltip_text = _summary_text(summaries.get(mode, {}))
 	$Center/Content/Status.text = "ИЗАБРАН РЕЖИМ · %d" % active_mode
+
+
+func show_share_fallback(text: String) -> void:
+	var share_text: TextEdit = _share_fallback.get_node("FallbackLayout/ShareText")
+	share_text.text = text
+	_share_fallback.visible = true
+	share_text.select_all()
+
+
+func show_copy_success() -> void:
+	_share_fallback.visible = false
 
 
 func _on_mode_pressed(mode: int) -> void:

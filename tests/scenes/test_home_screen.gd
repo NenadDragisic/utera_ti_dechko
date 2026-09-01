@@ -82,6 +82,31 @@ func test_home_renders_active_mode_without_retaining_domain_state() -> void:
 	assert_false(_has_property(home, "mode_summaries"))
 
 
+func test_home_manual_share_fallback_is_selectable_stacked_and_result_neutral() -> void:
+	var scene: PackedScene = load(HOME_SCENE_PATH)
+	assert_not_null(scene)
+	if scene == null:
+		return
+	var home: Control = scene.instantiate()
+	add_child_autofree(home)
+	home.show_share_fallback("УТЕРА ТИ ДЕЧКО #3")
+	await get_tree().process_frame
+
+	var fallback: PanelContainer = home.get_node("Center/Content/ShareFallback")
+	var layout: VBoxContainer = fallback.get_node("FallbackLayout")
+	var guidance: Label = layout.get_node("Guidance")
+	var share_text: TextEdit = layout.get_node("ShareText")
+	assert_true(fallback.visible)
+	assert_same(guidance.get_parent(), layout)
+	assert_same(share_text.get_parent(), layout)
+	assert_lte(guidance.global_position.y + guidance.size.y, share_text.global_position.y)
+	assert_false(share_text.editable)
+	assert_true(share_text.selecting_enabled)
+	assert_eq(share_text.text, "УТЕРА ТИ ДЕЧКО #3")
+	assert_false(_tree_contains_name(home, "Score"))
+	assert_false(_tree_contains_name(home, "Answers"))
+
+
 func _signal_named(object: Object, signal_name: String) -> Dictionary:
 	for signal_info in object.get_signal_list():
 		if signal_info.name == signal_name:
@@ -92,5 +117,14 @@ func _signal_named(object: Object, signal_name: String) -> Dictionary:
 func _has_property(object: Object, property_name: String) -> bool:
 	for property_info in object.get_property_list():
 		if property_info.name == property_name:
+			return true
+	return false
+
+
+func _tree_contains_name(node: Node, node_name: String) -> bool:
+	if node.name == node_name:
+		return true
+	for child in node.get_children():
+		if _tree_contains_name(child, node_name):
 			return true
 	return false

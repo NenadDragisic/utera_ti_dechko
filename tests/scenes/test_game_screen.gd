@@ -82,6 +82,27 @@ func test_game_screen_has_no_text_field_or_permanent_keyboard() -> void:
 	assert_false(_tree_contains_name(screen, "KeyboardView"))
 
 
+func test_desktop_onscreen_keyboard_preserves_wide_eight_board_layout() -> void:
+	var screen: Control = _instantiate_game_screen()
+	if screen == null:
+		return
+	var session := GameSession.create(_answers(8))
+	screen.render(session, 8)
+	screen.set_mobile_layout(false)
+	screen.set_onscreen_keyboard(true)
+	screen.layout_for_width(1440.0)
+
+	assert_false(screen.mobile_layout)
+	assert_true(screen.get_node("Layout").has_node("KeyboardView"))
+	assert_false(screen.get_node("Layout/Navigator").visible)
+	assert_eq(screen.board_columns, 4)
+	var visible_boards := 0
+	for board in screen.get_node("Layout/BoardsScroll/BoardCenter/BoardsGrid").get_children():
+		if board.visible:
+			visible_boards += 1
+	assert_eq(visible_boards, 8)
+
+
 func test_app_root_routes_home_to_game_and_wires_coordinator_state_changes() -> void:
 	var root: Control = load("res://app/app_root.tscn").instantiate()
 	root.save_repository_override = MemorySaveRepository.new()
