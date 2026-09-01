@@ -6,14 +6,22 @@ const WORD_LENGTH := 5
 const MINIMUM_CELL_SIZE := 48
 const MINIMUM_GLYPH_SIZE := 16
 const CELL_GAP := 4
+const MOTION_SECONDS := 0.15
+const SHAKE_DISTANCE := 4.0
 
 
 var reduced_motion: bool = false
 var flip_animation_enabled: bool = false
 var shake_animation_enabled: bool = false
+var solved_emphasis_animation_enabled: bool = false
 
 var _attempt_limit: int = 0
 var _styles: Dictionary = {}
+var _rendered_states: Dictionary = {}
+var _was_solved: bool = false
+var _has_rendered: bool = false
+var _motion_tweens: Array[Tween] = []
+var _base_panel_style: StyleBoxFlat
 
 @onready var _board_name: Label = $Content/Header/BoardName
 @onready var _attempt_status: Label = $Content/Header/AttemptStatus
@@ -23,8 +31,13 @@ var _styles: Dictionary = {}
 func render(board: BoardState, session: GameSession, display_index: int = 0) -> void:
 	if board == null or session == null:
 		return
+	_stop_motion()
 	_ensure_grid(session.attempt_limit)
 	_board_name.text = "РЕЧ %d" % (display_index + 1)
+	accessibility_name = "Табла %d, %s" % [
+		display_index + 1,
+		"решена" if board.is_solved else "у току",
+	]
 	_attempt_status.text = "ПОКУШАЈ %d / %d" % [
 		mini(session.attempt_index + 1, session.attempt_limit),
 		session.attempt_limit,
@@ -44,13 +57,22 @@ func render(board: BoardState, session: GameSession, display_index: int = 0) -> 
 			for column in range(session.current_input.length()):
 				_set_cell(active_row, column, session.current_input[column], active_state)
 
+	_apply_solved_style(board.is_solved)
+	var next_states := _current_states()
+	if _has_rendered and not reduced_motion:
+		_animate_state_changes(next_states, session, board.is_solved)
+	_rendered_states = next_states
+	_was_solved = board.is_solved
+	_has_rendered = true
+
 
 func set_reduced_motion(value: bool) -> void:
 	reduced_motion = value
-	# Task 13 enables the motion hooks. Keeping both flags false now prevents
-	# state changes from animating in either motion preference.
-	flip_animation_enabled = false
-	shake_animation_enabled = false
+	flip_animation_enabled = not reduced_motion
+	shake_animation_enabled = not reduced_motion
+	solved_emphasis_animation_enabled = not reduced_motion
+	if reduced_motion:
+		_stop_motion()
 
 
 func _ensure_grid(attempt_limit: int) -> void:
@@ -67,6 +89,10 @@ func _ensure_grid(attempt_limit: int) -> void:
 			cell.name = "Cell_%d_%d" % [row, column]
 			cell.custom_minimum_size = Vector2(MINIMUM_CELL_SIZE, MINIMUM_CELL_SIZE)
 			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			cell.pivot_offset = Vector2(
+				MINIMUM_CELL_SIZE * 0.5,
+				MINIMUM_CELL_SIZE * 0.5,
+			)
 			var glyph := Label.new()
 			glyph.name = "Glyph"
 			glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -88,6 +114,11 @@ func _set_cell(row: int, column: int, letter: String, state: String) -> void:
 	var glyph := cell.get_node("Glyph") as Label
 	glyph.text = letter
 	cell.set_meta("render_state", state)
+	cell.accessibility_name = "Ред %d, слово %d, %s" % [
+		row + 1,
+		column + 1,
+		_accessibility_state_label(state),
+	]
 	cell.add_theme_stylebox_override("panel", _style(state))
 	glyph.add_theme_color_override("font_color", _font_color(state))
 
@@ -153,3 +184,126 @@ func _state_for_mark(mark: LetterMark.Value) -> String:
 			return "present"
 		_:
 			return "absent"
+
+
+func _accessibility_state_label(state: String) -> String:
+	match state:
+		"correct":
+			return "тачно"
+		"present":
+			return "присутно"
+		"absent":
+			return "није присутно"
+		"current":
+			return "унето"
+		"invalid":
+			return "неважеће"
+		_:
+			return "празно"
+
+
+func _current_states() -> Dictionary:
+	var states := {}
+	for row in range(_attempt_limit):
+		for column in range(WORD_LENGTH):
+			states[Vector2i(row, column)] = _cell(row, column).get_meta("render_state")
+	return states
+
+
+func _animate_state_changes(
+	next_states: Dictionary,
+	session: GameSession,
+	is_solved: bool,
+) -> void:
+	var invalid_row := -1
+	for position: Vector2i in next_states:
+		var state: String = next_states[position]
+		var previous: String = _rendered_states.get(position, "empty")
+		if ["correct", "present", "absent"].has(state) and state != previous:
+			_animate_cell_reveal(_cell(position.x, position.y))
+		if state == "invalid" and previous != "invalid":
+			invalid_row = position.x
+	if invalid_row >= 0 and invalid_row < session.attempt_limit:
+		_animate_invalid_row(invalid_row)
+	if is_solved and not _was_solved:
+		_animate_solved_emphasis()
+
+
+func _animate_cell_reveal(cell: Control) -> void:
+	cell.pivot_offset = cell.size * 0.5
+	cell.scale = Vector2(1.0, 0.82)
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(cell, "scale", Vector2.ONE, MOTION_SECONDS)
+	_motion_tweens.append(tween)
+
+
+func _animate_invalid_row(row: int) -> void:
+	for column in range(WORD_LENGTH):
+		var glyph := _cell(row, column).get_node("Glyph") as Label
+		var origin := glyph.position
+		glyph.set_meta("motion_origin", origin)
+		glyph.position.x = origin.x - SHAKE_DISTANCE
+		var tween := create_tween()
+		tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_property(
+			glyph,
+			"position:x",
+			origin.x + SHAKE_DISTANCE,
+			MOTION_SECONDS / 3.0,
+		)
+		tween.tween_property(
+			glyph,
+			"position:x",
+			origin.x - SHAKE_DISTANCE,
+			MOTION_SECONDS / 3.0,
+		)
+		tween.tween_property(glyph, "position:x", origin.x, MOTION_SECONDS / 3.0)
+		_motion_tweens.append(tween)
+
+
+func _animate_solved_emphasis() -> void:
+	pivot_offset = size * 0.5
+	scale = Vector2(0.97, 0.97)
+	modulate = _semantic_color("success", DesignTokens.MINT_SUCCESS).lerp(
+		Color.WHITE,
+		0.35,
+	)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self, "scale", Vector2.ONE, MOTION_SECONDS)
+	tween.tween_property(self, "modulate", Color.WHITE, MOTION_SECONDS)
+	_motion_tweens.append(tween)
+
+
+func _apply_solved_style(is_solved: bool) -> void:
+	if _base_panel_style == null:
+		_base_panel_style = get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+	if not is_solved:
+		add_theme_stylebox_override("panel", _base_panel_style)
+		return
+	var solved := _base_panel_style.duplicate() as StyleBoxFlat
+	var mint := _semantic_color("success", DesignTokens.MINT_SUCCESS)
+	solved.border_color = mint
+	solved.set_border_width_all(2)
+	add_theme_stylebox_override("panel", solved)
+
+
+func _stop_motion() -> void:
+	for tween in _motion_tweens:
+		if tween != null and tween.is_valid():
+			tween.kill()
+	_motion_tweens.clear()
+	scale = Vector2.ONE
+	modulate = Color.WHITE
+	if _attempt_limit == 0:
+		return
+	for row in range(_attempt_limit):
+		for column in range(WORD_LENGTH):
+			var cell := _cell(row, column)
+			cell.scale = Vector2.ONE
+			var glyph := cell.get_node("Glyph") as Label
+			if glyph.has_meta("motion_origin"):
+				glyph.position = glyph.get_meta("motion_origin")
+				glyph.remove_meta("motion_origin")

@@ -7,6 +7,7 @@ signal erase_requested
 signal submit_requested
 signal mode_selected(mode: int)
 signal board_selected(index: int)
+signal back_requested
 
 
 const BOARD_VIEW_SCENE := preload("res://features/gameplay/board_view.tscn")
@@ -38,7 +39,10 @@ var _active_row_reveal_queued: bool = false
 func _ready() -> void:
 	set_process_unhandled_key_input(true)
 	for mode in MODES:
-		_mode_button(mode).pressed.connect(mode_selected.emit.bind(mode))
+		var button := _mode_button(mode)
+		button.pressed.connect(mode_selected.emit.bind(mode))
+		button.accessibility_name = "Режим %d" % mode
+	_configure_horizontal_focus(_mode_buttons())
 	_boards_scroll.gui_input.connect(_on_focus_gui_input)
 	_boards_scroll.resized.connect(_on_board_viewport_resized)
 	resized.connect(_on_resized)
@@ -52,7 +56,12 @@ func render(session: GameSession, active_mode: int, reduced_motion: bool = false
 	_ensure_board_views(session.boards.size())
 	selected_board_index = clampi(selected_board_index, 0, maxi(0, session.boards.size() - 1))
 	for mode in MODES:
-		_mode_button(mode).button_pressed = mode == active_mode
+		var mode_button := _mode_button(mode)
+		mode_button.button_pressed = mode == active_mode
+		mode_button.accessibility_name = "Режим %d, %s" % [
+			mode,
+			"изабран" if mode == active_mode else "није изабран",
+		]
 	for index in range(session.boards.size()):
 		var board_view := _boards_grid.get_child(index) as BoardView
 		board_view.set_reduced_motion(reduced_motion)
@@ -95,6 +104,7 @@ func _sync_keyboard_visibility() -> void:
 		_keyboard_view.submit_pressed.connect(submit_requested.emit)
 		_keyboard_view.collapsed_changed.connect(_on_keyboard_collapsed_changed)
 		$Layout.add_child(_keyboard_view)
+		_configure_keyboard_accessibility()
 		if _session != null:
 			_keyboard_view.render(_session)
 	elif not should_show and _keyboard_view != null:
@@ -132,6 +142,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed:
+		return
+	if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
+		request_back()
+		get_viewport().set_input_as_handled()
 		return
 	if key_event.keycode == KEY_BACKSPACE or key_event.physical_keycode == KEY_BACKSPACE:
 		erase_requested.emit()
@@ -174,6 +188,7 @@ func _ensure_navigator(count: int) -> void:
 		button.focus_mode = Control.FOCUS_ALL
 		button.pressed.connect(select_board.bind(index))
 		_navigator.add_child(button)
+	_configure_horizontal_focus(_navigator_buttons())
 
 
 func _refresh_mobile_presentation() -> void:
@@ -197,6 +212,11 @@ func _refresh_mobile_presentation() -> void:
 		button.set_meta("navigator_state", state)
 		button.set_meta("selected", index == selected_board_index)
 		button.tooltip_text = "РЕЧ %d · %s" % [index + 1, _navigator_state_label(state)]
+		button.accessibility_name = "Табла %d, %s, %s" % [
+			index + 1,
+			_navigator_state_label(state),
+			"изабрана" if index == selected_board_index else "није изабрана",
+		]
 		button.modulate = _navigator_color(state, index == selected_board_index)
 
 
@@ -287,6 +307,56 @@ func _preferred_columns(board_count: int, capacity: int) -> int:
 
 func _mode_button(mode: int) -> Button:
 	return get_node("Layout/ModeBar/Mode%d" % mode) as Button
+
+
+func request_back() -> void:
+	if _keyboard_view != null and not _keyboard_view.collapsed:
+		_keyboard_view.set_collapsed(true)
+		return
+	back_requested.emit()
+
+
+func _mode_buttons() -> Array[Button]:
+	var buttons: Array[Button] = []
+	for mode in MODES:
+		buttons.append(_mode_button(mode))
+	return buttons
+
+
+func _navigator_buttons() -> Array[Button]:
+	var buttons: Array[Button] = []
+	for child in _navigator.get_children():
+		buttons.append(child as Button)
+	return buttons
+
+
+func _configure_horizontal_focus(buttons: Array[Button]) -> void:
+	if buttons.is_empty():
+		return
+	for index in range(buttons.size()):
+		var button := buttons[index]
+		var previous := buttons[posmod(index - 1, buttons.size())]
+		var next := buttons[(index + 1) % buttons.size()]
+		button.focus_mode = Control.FOCUS_ALL
+		button.focus_neighbor_left = button.get_path_to(previous)
+		button.focus_neighbor_right = button.get_path_to(next)
+		button.focus_previous = button.get_path_to(previous)
+		button.focus_next = button.get_path_to(next)
+
+
+func _configure_keyboard_accessibility() -> void:
+	if _keyboard_view == null:
+		return
+	var names := {
+		"ReopenButton": "Отвори тастатуру",
+		"SheetContent/Content/Header/Actions/EraseButton": "Обриши последње слово",
+		"SheetContent/Content/Header/Actions/SubmitButton": "Пошаљи реч",
+		"SheetContent/Content/Header/CollapseButton": "Сакриј тастатуру",
+	}
+	for path: String in names:
+		(_keyboard_view.get_node(path) as Button).accessibility_name = names[path]
+	for key in _keyboard_view.find_children("Key_*", "Button", true, false):
+		(key as Button).accessibility_name = "Унеси слово %s" % (key as Button).text
 
 
 func _on_board_gui_input(event: InputEvent, index: int) -> void:

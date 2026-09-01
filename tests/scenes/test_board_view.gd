@@ -112,14 +112,14 @@ func test_active_board_never_displays_its_answer_outside_submitted_rows() -> voi
 	assert_eq(_row_text(view, 0), "АВАЛА")
 
 
-func test_animation_hooks_are_reduced_motion_aware_and_disabled_for_now() -> void:
+func test_animation_hooks_are_enabled_only_when_reduced_motion_is_off() -> void:
 	var view: Control = _instantiate_board_view()
 	if view == null:
 		return
 
 	view.set_reduced_motion(false)
-	assert_false(view.flip_animation_enabled)
-	assert_false(view.shake_animation_enabled)
+	assert_true(view.flip_animation_enabled)
+	assert_true(view.shake_animation_enabled)
 	view.set_reduced_motion(true)
 	assert_true(view.reduced_motion)
 	assert_false(view.flip_animation_enabled)

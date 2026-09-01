@@ -36,6 +36,7 @@ var coordinator: GameCoordinator
 var current_screen: Control
 var _statistics_filter: int = 0
 var _confirmation_dialog: ConfirmNewGameDialog
+var _last_reported_save_error: Error = OK
 
 @onready var _screen_container: Control = $SafeArea/Layout/ScreenContainer
 @onready var _new_game_button: Button = $SafeArea/Layout/Footer/NewGameButton
@@ -54,9 +55,57 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if progress_service != null and progress_service.dirty:
 		progress_service.tick(delta)
+		if (
+			progress_service.last_error != OK
+			and progress_service.last_error != _last_reported_save_error
+		):
+			_last_reported_save_error = progress_service.last_error
+			_notice_banner.show_message(
+				"Напредак није сачуван. Покушаћемо поново после следеће измене."
+			)
+		elif progress_service.last_error == OK:
+			_last_reported_save_error = OK
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event is InputEventKey:
+		return
+	var key_event := event as InputEventKey
+	if (
+		not key_event.pressed
+		or (
+			key_event.keycode != KEY_ESCAPE
+			and key_event.physical_keycode != KEY_ESCAPE
+		)
+	):
+		return
+	_handle_back()
+	get_viewport().set_input_as_handled()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST and is_node_ready():
+		_handle_back()
+
+
+func _handle_back() -> void:
+	if _notice_banner != null and _notice_banner.visible:
+		_notice_banner.dismiss()
+		return
+	if _confirmation_dialog != null:
+		_on_new_game_cancelled()
+		return
+	if current_screen is GameScreen:
+		(current_screen as GameScreen).request_back()
+		return
+	if current_screen == null or current_screen is HomeScreen:
+		return
+	_show_home(true)
+	_on_state_changed()
 
 
 func start(pool: WordPool, pool_error: String = "") -> void:
+	_notice_banner.dismiss()
 	coordinator = null
 	progress_service = null
 	share_service = null
@@ -83,7 +132,7 @@ func start(pool: WordPool, pool_error: String = "") -> void:
 	share_service = ShareService.new(clipboard)
 	coordinator = GameCoordinator.new(progress_service, session_factory, share_service, pool)
 	coordinator.state_changed.connect(_on_state_changed)
-	coordinator.notice_requested.connect(_notice_banner.show_message)
+	coordinator.notice_requested.connect(_on_notice_requested)
 	coordinator.confirmation_requested.connect(_on_confirmation_requested)
 
 	_show_home()
@@ -125,6 +174,7 @@ func _show_game() -> void:
 	game.erase_requested.connect(_on_game_erase_requested)
 	game.submit_requested.connect(_on_game_submit_requested)
 	game.mode_selected.connect(_on_game_mode_selected)
+	game.back_requested.connect(_on_game_back_requested)
 	# A HomeScreen button signal is still executing while this route changes.
 	# Queueing only that outgoing screen avoids freeing a signal-locked object.
 	set_screen(game, true)
@@ -168,12 +218,17 @@ func _show_fatal_startup(pool: WordPool, detail: String) -> void:
 	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	message.text = (
-		"Покретање није могуће: потребно је најмање %d исправних речи, доступно је %d."
-		% [REQUIRED_ANSWER_COUNT, available]
-	)
-	if not detail.is_empty():
-		message.text += "\n" + detail
+	if pool == null or (available == 0 and not detail.is_empty()):
+		message.text = "Покретање није могуће: речник није доступан. "
+	elif available == 0:
+		message.text = "Покретање није могуће: речник не садржи исправне речи. "
+	else:
+		message.text = "Покретање није могуће: речник нема довољно исправних речи. "
+	message.text += "Потребно је најмање %d, доступно је %d." % [
+		REQUIRED_ANSWER_COUNT,
+		available,
+	]
+	message.accessibility_name = "Критична грешка при покретању. %s" % message.text
 	fatal.add_child(message)
 	set_screen(fatal)
 
@@ -307,6 +362,9 @@ func _on_result_copy_requested(text: String) -> void:
 		_notice_banner.show_message("Резултат је копиран.")
 	else:
 		results.show_share_fallback(text)
+		_notice_banner.show_message(
+			"Копирање није успело. Текст је доступан за ручно копирање."
+		)
 
 
 func _on_result_mode_selected(mode: int) -> void:
@@ -366,6 +424,24 @@ func _on_combined_share_requested() -> void:
 		_notice_banner.show_message("Резултат је копиран.")
 	else:
 		home.show_share_fallback(share_text)
+		_notice_banner.show_message(
+			"Копирање није успело. Текст је доступан за ручно копирање."
+		)
+
+
+func _on_notice_requested(message: String) -> void:
+	if message.begins_with("Напредак није сачуван"):
+		_last_reported_save_error = progress_service.last_error if progress_service != null else OK
+		_notice_banner.show_message(
+			"Напредак није сачуван. Покушаћемо поново после следеће измене."
+		)
+		return
+	_notice_banner.show_message(message)
+
+
+func _on_game_back_requested() -> void:
+	_show_home(true)
+	_on_state_changed()
 
 
 func _on_new_game_pressed() -> void:

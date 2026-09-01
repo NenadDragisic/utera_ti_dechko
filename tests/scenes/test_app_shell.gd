@@ -99,8 +99,15 @@ func test_notice_banner_reports_copy_without_blocking_pointer_input() -> void:
 	assert_eq(banner.anchor_bottom, 1.0)
 	banner.show_message("Напредак није сачуван.")
 	assert_true(banner.visible)
-	assert_eq(banner.get_node("TopMargin/Panel/Message").text, "Напредак није сачуван.")
-	assert_true(_all_controls_ignore_input(banner))
+	assert_eq(
+		banner.get_node("TopMargin/Panel/Layout/Message").text,
+		"Напредак није сачуван.",
+	)
+	var dismiss: Button = banner.get_node("TopMargin/Panel/Layout/DismissButton")
+	assert_gte(dismiss.custom_minimum_size.x, 44.0)
+	assert_gte(dismiss.custom_minimum_size.y, 44.0)
+	dismiss.pressed.emit()
+	assert_false(banner.visible)
 
 
 func test_themes_expose_semantic_colors_spacing_and_accessible_text_contrast() -> void:
