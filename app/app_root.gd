@@ -19,6 +19,9 @@ const CONFIRM_NEW_GAME_DIALOG_SCENE := preload(
 const DARK_THEME := preload("res://app/app_theme.tres")
 const LIGHT_THEME := preload("res://app/app_theme_light.tres")
 const REQUIRED_ANSWER_COUNT := SessionFactory.BUNDLE_ANSWER_COUNT
+const DESIGN_CONTENT_SIZE := Vector2i(1440, 900)
+const ANDROID_BASE_DPI := 160.0
+const SHELL_VERTICAL_MARGIN := 20
 const SAVE_RETRY_NOTICE := (
 	"Напредак није сачуван. Аутоматски ћемо покушати поново."
 )
@@ -48,6 +51,7 @@ var _last_reported_save_error: Error = OK
 
 func _ready() -> void:
 	set_process_unhandled_key_input(true)
+	_apply_root_content_scale()
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 	_new_game_button.pressed.connect(_on_new_game_pressed)
 	word_repository = BazaWordRepository.new()
@@ -159,6 +163,7 @@ func set_screen(screen: Control, defer_previous_free: bool = false) -> void:
 	current_screen = screen
 	_screen_container.add_child(current_screen)
 	current_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_apply_responsive_shell()
 
 
 func _show_home(defer_previous_free: bool = false) -> void:
@@ -184,6 +189,7 @@ func _show_game() -> void:
 	game.set_onscreen_keyboard(
 		coordinator != null and coordinator.settings.onscreen_keyboard
 	)
+	_apply_responsive_shell()
 
 
 func _show_results() -> void:
@@ -301,6 +307,7 @@ func _apply_settings_preferences() -> void:
 		var game := current_screen as GameScreen
 		game.set_mobile_layout(platform_capabilities.is_mobile_layout(get_viewport_rect().size))
 		game.set_onscreen_keyboard(coordinator.settings.onscreen_keyboard)
+	_apply_responsive_shell()
 
 
 func _theme_for_preference(preference: Settings.ThemePreference) -> Theme:
@@ -489,7 +496,62 @@ func _close_confirmation_dialog() -> void:
 	_confirmation_dialog = null
 
 
+func _apply_root_content_scale(
+	physical_size: Vector2i = Vector2i.ZERO,
+	display_density: float = 0.0,
+) -> void:
+	var viewport := get_viewport()
+	if not viewport is Window:
+		return
+	var window := viewport as Window
+	if physical_size == Vector2i.ZERO:
+		physical_size = DisplayServer.window_get_size()
+	if physical_size.x <= 0 or physical_size.y <= 0:
+		return
+	if display_density <= 0.0:
+		display_density = _display_density()
+	var native_content_size := Vector2i(
+		roundi(physical_size.x / display_density),
+		roundi(physical_size.y / display_density),
+	)
+	var desired_size := DESIGN_CONTENT_SIZE
+	if (
+		native_content_size.x < DESIGN_CONTENT_SIZE.x
+		or native_content_size.y < DESIGN_CONTENT_SIZE.y
+	):
+		desired_size = native_content_size
+	if window.content_scale_size != desired_size:
+		window.content_scale_size = desired_size
+
+
+func _display_density() -> float:
+	if OS.get_name() != "Android":
+		return 1.0
+	return maxf(DisplayServer.screen_get_dpi() / ANDROID_BASE_DPI, 1.0)
+
+
+func _apply_responsive_shell() -> void:
+	if not is_node_ready():
+		return
+	var compact_game_landscape := (
+		current_screen is GameScreen
+		and (current_screen as GameScreen).mobile_layout
+		and get_viewport_rect().size.x > get_viewport_rect().size.y
+	)
+	var header := $SafeArea/Layout/Header as Control
+	var footer := $SafeArea/Layout/Footer as Control
+	header.visible = not compact_game_landscape
+	footer.visible = not compact_game_landscape and _new_game_button.visible
+	$SafeArea.add_theme_constant_override(
+		"margin_top", 0 if compact_game_landscape else SHELL_VERTICAL_MARGIN
+	)
+	$SafeArea.add_theme_constant_override(
+		"margin_bottom", 0 if compact_game_landscape else SHELL_VERTICAL_MARGIN
+	)
+
+
 func _on_viewport_size_changed() -> void:
+	_apply_root_content_scale()
 	if platform_capabilities == null or not current_screen is GameScreen:
 		return
 	var game := current_screen as GameScreen
@@ -497,3 +559,4 @@ func _on_viewport_size_changed() -> void:
 	game.set_onscreen_keyboard(
 		coordinator != null and coordinator.settings.onscreen_keyboard
 	)
+	_apply_responsive_shell()

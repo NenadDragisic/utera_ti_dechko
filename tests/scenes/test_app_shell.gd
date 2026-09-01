@@ -62,6 +62,37 @@ func test_shell_starts_real_dependencies_and_routes_home_mode_intent() -> void:
 	assert_signal_emitted_with_parameters(root, "game_requested", [4])
 
 
+func test_root_window_keeps_web_and_dense_android_at_readable_content_scale() -> void:
+	var window := get_tree().root
+	var original_content_scale_size := window.content_scale_size
+	var scene: PackedScene = load(APP_ROOT_SCENE_PATH)
+	assert_not_null(scene)
+	if scene == null:
+		return
+	var root: Control = scene.instantiate()
+	root.save_repository_override = MemorySaveRepository.new()
+	add_child_autofree(root)
+
+	root._apply_root_content_scale(Vector2i(390, 844))
+	var portrait_scale := window.content_scale_size
+	root._apply_root_content_scale(Vector2i(844, 390))
+	var landscape_scale := window.content_scale_size
+	root._apply_root_content_scale(Vector2i(1440, 900))
+	var desktop_scale := window.content_scale_size
+	root._apply_root_content_scale(Vector2i(1080, 2400), 2.625)
+	var android_portrait_scale := window.content_scale_size
+	root._apply_root_content_scale(Vector2i(2400, 1080), 2.625)
+	var android_landscape_scale := window.content_scale_size
+
+	window.content_scale_size = original_content_scale_size
+	await get_tree().process_frame
+	assert_eq(portrait_scale, Vector2i(390, 844))
+	assert_eq(landscape_scale, Vector2i(844, 390))
+	assert_eq(desktop_scale, Vector2i(1440, 900))
+	assert_eq(android_portrait_scale, Vector2i(411, 914))
+	assert_eq(android_landscape_scale, Vector2i(914, 411))
+
+
 func test_shell_ticks_dirty_progress_and_rejects_an_unusable_pool() -> void:
 	var scene: PackedScene = load(APP_ROOT_SCENE_PATH)
 	assert_not_null(scene)

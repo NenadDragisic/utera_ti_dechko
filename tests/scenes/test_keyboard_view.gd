@@ -47,6 +47,44 @@ func test_keyboard_buttons_emit_intents_without_mutating_a_session() -> void:
 	assert_eq(session.attempt_index, 0)
 
 
+func test_touch_drag_starting_over_a_key_reaches_each_final_key_without_typing() -> void:
+	var keyboard := _keyboard()
+	if keyboard == null:
+		return
+	keyboard.size = Vector2(390, 300)
+	await get_tree().process_frame
+	watch_signals(keyboard)
+	var final_letters := ["Ш", "Ч", "М"]
+
+	for row_index in range(3):
+		var row: ScrollContainer = keyboard.get_node(
+			"SheetContent/Content/Rows/Row%d" % (row_index + 1)
+		)
+		var keys: HBoxContainer = row.get_node("Keys")
+		var first_key := keys.get_child(0) as Button
+		var start := Vector2(first_key.position.x + first_key.size.x * 0.5, 22.0)
+		_emit_row_touch(row, start, true)
+		_emit_row_drag(row, start - Vector2(300.0, 0.0), Vector2(-300.0, 0.0))
+		_emit_row_touch(row, start - Vector2(300.0, 0.0), false)
+		assert_gt(row.scroll_horizontal, 0, "row %d scrolls" % (row_index + 1))
+		assert_signal_emit_count(keyboard, "letter_pressed", row_index)
+
+		var final_key := keys.get_child(keys.get_child_count() - 1) as Button
+		var final_position := Vector2(
+			final_key.position.x + final_key.size.x * 0.5 - row.scroll_horizontal,
+			22.0,
+		)
+		assert_between(final_position.x, 0.0, row.size.x)
+		_emit_row_touch(row, final_position, true)
+		_emit_row_touch(row, final_position, false)
+		assert_signal_emitted_with_parameters(
+			keyboard,
+			"letter_pressed",
+			[final_letters[row_index]],
+		)
+		assert_signal_emit_count(keyboard, "letter_pressed", row_index + 1)
+
+
 func test_collapse_leaves_only_reopen_handle_and_submit_collapses_sheet() -> void:
 	var keyboard := _keyboard()
 	if keyboard == null:
@@ -123,3 +161,19 @@ func _keyboard() -> Control:
 	var keyboard: Control = scene.instantiate()
 	add_child_autofree(keyboard)
 	return keyboard
+
+
+func _emit_row_touch(row: ScrollContainer, position: Vector2, pressed: bool) -> void:
+	var event := InputEventScreenTouch.new()
+	event.index = 0
+	event.position = position
+	event.pressed = pressed
+	row.gui_input.emit(event)
+
+
+func _emit_row_drag(row: ScrollContainer, position: Vector2, relative: Vector2) -> void:
+	var event := InputEventScreenDrag.new()
+	event.index = 0
+	event.position = position
+	event.relative = relative
+	row.gui_input.emit(event)

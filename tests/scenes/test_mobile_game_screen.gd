@@ -164,7 +164,7 @@ func test_narrow_touch_web_reclassifies_layout_after_orientation_change() -> voi
 
 func test_android_rotation_reveals_progressed_active_row_after_viewport_shrinks() -> void:
 	var viewport := SubViewport.new()
-	viewport.size = Vector2i(390, 844)
+	viewport.size = Vector2i(411, 914)
 	add_child_autofree(viewport)
 	var root: Control = load("res://app/app_root.tscn").instantiate()
 	root.save_repository_override = MemorySaveRepository.new()
@@ -177,11 +177,26 @@ func test_android_rotation_reveals_progressed_active_row_after_viewport_shrinks(
 	await get_tree().process_frame
 	var screen: GameScreen = root.current_screen
 	assert_true(_active_row_is_visible(screen, session), "portrait setup")
+	assert_true(root.get_node("SafeArea/Layout/Header").visible)
+	assert_true(root.get_node("SafeArea/Layout/Footer").visible)
+	var keyboard: KeyboardView = screen.get_node("Layout/KeyboardView")
+	keyboard.set_collapsed(false)
+	await get_tree().create_timer(KeyboardView.COLLAPSE_TWEEN_SECONDS + 0.05).timeout
 
-	viewport.size = Vector2i(844, 390)
+	viewport.size = Vector2i(914, 411)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	assert_true(_active_row_is_visible(screen, session), "landscape after rotation")
+	assert_false(root.get_node("SafeArea/Layout/Header").visible)
+	assert_false(root.get_node("SafeArea/Layout/Footer").visible)
+	assert_eq(root.get_node("SafeArea").get_theme_constant("margin_top"), 0)
+	assert_eq(root.get_node("SafeArea").get_theme_constant("margin_bottom"), 0)
+	assert_true(_active_row_is_visible(screen, session), "expanded landscape after rotation")
+
+	viewport.size = Vector2i(411, 914)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_true(root.get_node("SafeArea/Layout/Header").visible)
+	assert_true(root.get_node("SafeArea/Layout/Footer").visible)
 
 
 func _mobile_screen(viewport_size: Vector2) -> Control:
