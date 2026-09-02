@@ -76,6 +76,7 @@ func load_or_create() -> LoadResult:
 	var saved_fingerprint: String = document["pool_fingerprint"]
 	var needs_persist := false
 	if saved_fingerprint != _pool.fingerprint():
+		_reconcile_current_inputs()
 		_factory.reconcile_bag(_pool, bag, _active_answers(bundle))
 		needs_persist = true
 
@@ -156,7 +157,11 @@ func _validate_document(document: Dictionary) -> String:
 	if not statistics_error.is_empty():
 		return statistics_error
 	var active_answers := PackedStringArray()
-	var bundle_error := _validate_bundle(document["bundle"], active_answers)
+	var bundle_error := _validate_bundle(
+		document["bundle"],
+		active_answers,
+		document["pool_fingerprint"] == _pool.fingerprint(),
+	)
 	if not bundle_error.is_empty():
 		return bundle_error
 	var bag_error := _validate_bag(document["bag"], document["pool_fingerprint"], active_answers)
@@ -195,7 +200,11 @@ func _validate_statistics(data: Dictionary) -> String:
 	return ""
 
 
-func _validate_bundle(data: Dictionary, active_answers: PackedStringArray) -> String:
+func _validate_bundle(
+	data: Dictionary,
+	active_answers: PackedStringArray,
+	validate_current_input: bool,
+) -> String:
 	if not _has_keys(data, ["sessions"]) or typeof(data["sessions"]) != TYPE_DICTIONARY:
 		return "Сесије нису исправне."
 	var sessions: Dictionary = data["sessions"]
@@ -206,7 +215,13 @@ func _validate_bundle(data: Dictionary, active_answers: PackedStringArray) -> St
 		var mode_key := str(mode)
 		if not sessions.has(mode_key) or typeof(sessions[mode_key]) != TYPE_DICTIONARY:
 			return "Сесија режима %d није исправна." % mode
-		var session_error := _validate_session(sessions[mode_key], mode, seen_answers, active_answers)
+		var session_error := _validate_session(
+			sessions[mode_key],
+			mode,
+			seen_answers,
+			active_answers,
+			validate_current_input,
+		)
 		if not session_error.is_empty():
 			return session_error
 	return ""
@@ -217,6 +232,7 @@ func _validate_session(
 	mode: int,
 	seen_answers: Dictionary,
 	active_answers: PackedStringArray,
+	validate_current_input: bool,
 ) -> String:
 	var required := ["current_input", "input_is_invalid", "attempt_index", "attempt_limit", "status", "statistics_recorded", "boards"]
 	if not _has_keys(data, required):
@@ -225,6 +241,13 @@ func _validate_session(
 		return "Унос режима %d није исправан." % mode
 	if typeof(data["input_is_invalid"]) != TYPE_BOOL or typeof(data["statistics_recorded"]) != TYPE_BOOL:
 		return "Ознаке сесије режима %d нису исправне." % mode
+	if validate_current_input:
+		var expected_invalid: bool = (
+			data["current_input"].length() == 5
+			and not _pool.contains(data["current_input"])
+		)
+		if data["input_is_invalid"] != expected_invalid:
+			return "Ознака исправности уноса режима %d није у складу са речником." % mode
 	if not _is_integer(data["attempt_index"]) or not _is_integer(data["attempt_limit"]) or not _is_integer(data["status"]):
 		return "Број покушаја режима %d није исправан." % mode
 	var attempt_index := int(data["attempt_index"])
@@ -413,6 +436,15 @@ func _record_unrecorded_completed_sessions() -> bool:
 		session.statistics_recorded = true
 		changed = true
 	return changed
+
+
+func _reconcile_current_inputs() -> void:
+	for mode in MODES:
+		var session: GameSession = bundle.sessions[mode]
+		session.input_is_invalid = (
+			session.current_input.length() == 5
+			and not _pool.contains(session.current_input)
+		)
 
 
 func _encode_document() -> Dictionary:

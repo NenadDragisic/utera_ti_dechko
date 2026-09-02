@@ -42,6 +42,8 @@ var coordinator: GameCoordinator
 var current_screen: Control
 var _statistics_filter: int = 0
 var _confirmation_dialog: ConfirmNewGameDialog
+var _confirmation_previous_focus: Control
+var _confirmation_screen_process_mode: ProcessMode = PROCESS_MODE_INHERIT
 var _last_reported_save_error: Error = OK
 
 @onready var _screen_container: Control = $SafeArea/Layout/ScreenContainer
@@ -391,6 +393,7 @@ func _on_result_mode_selected(mode: int) -> void:
 	var session := coordinator.active_session()
 	if session != null and session.status == GameSession.Status.ACTIVE:
 		_show_game()
+		_render_game_screen()
 	else:
 		_show_results()
 
@@ -470,6 +473,10 @@ func _on_confirmation_requested() -> void:
 	new_game_confirmation_requested.emit()
 	if _confirmation_dialog != null:
 		return
+	_confirmation_previous_focus = get_viewport().gui_get_focus_owner()
+	if current_screen != null:
+		_confirmation_screen_process_mode = current_screen.process_mode
+		current_screen.process_mode = PROCESS_MODE_DISABLED
 	_confirmation_dialog = CONFIRM_NEW_GAME_DIALOG_SCENE.instantiate()
 	_confirmation_dialog.confirmed.connect(_on_new_game_confirmed)
 	_confirmation_dialog.cancelled.connect(_on_new_game_cancelled)
@@ -492,8 +499,18 @@ func _on_new_game_confirmed() -> void:
 func _close_confirmation_dialog() -> void:
 	if _confirmation_dialog == null:
 		return
+	if current_screen != null:
+		current_screen.process_mode = _confirmation_screen_process_mode
+	var previous_focus := _confirmation_previous_focus
 	_confirmation_dialog.queue_free()
 	_confirmation_dialog = null
+	_confirmation_previous_focus = null
+	call_deferred("_restore_confirmation_focus", previous_focus)
+
+
+func _restore_confirmation_focus(previous_focus: Control) -> void:
+	if is_instance_valid(previous_focus) and previous_focus.is_inside_tree():
+		previous_focus.grab_focus()
 
 
 func _apply_root_content_scale(

@@ -143,23 +143,24 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var key_event := event as InputEventKey
 	if not key_event.pressed:
 		return
+	var viewport := get_viewport()
 	if key_event.keycode == KEY_ESCAPE or key_event.physical_keycode == KEY_ESCAPE:
 		request_back()
-		get_viewport().set_input_as_handled()
+		viewport.set_input_as_handled()
 		return
 	if key_event.keycode == KEY_BACKSPACE or key_event.physical_keycode == KEY_BACKSPACE:
 		erase_requested.emit()
-		get_viewport().set_input_as_handled()
+		viewport.set_input_as_handled()
 		return
 	if key_event.keycode == KEY_ENTER or key_event.physical_keycode == KEY_ENTER:
 		submit_requested.emit()
-		get_viewport().set_input_as_handled()
+		viewport.set_input_as_handled()
 		return
 	var letter := InputMapper.map_event(key_event)
 	if letter.is_empty():
 		return
 	letter_typed.emit(letter)
-	get_viewport().set_input_as_handled()
+	viewport.set_input_as_handled()
 
 
 func _ensure_board_views(count: int) -> void:

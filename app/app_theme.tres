@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=11 format=3]
+[gd_resource type="Theme" load_steps=13 format=3]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_background"]
 bg_color = Color(0.0509804, 0.0666667, 0.0901961, 1)
@@ -83,6 +83,33 @@ content_margin_top = 12.0
 content_margin_right = 16.0
 content_margin_bottom = 12.0
 
+[sub_resource type="StyleBoxFlat" id="StyleBox_board"]
+bg_color = Color(0.0901961, 0.117647, 0.156863, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.160784, 0.196078, 0.254902, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_keyboard"]
+bg_color = Color(0.0901961, 0.117647, 0.156863, 1)
+border_width_top = 1
+border_color = Color(0.160784, 0.196078, 0.254902, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+
 [sub_resource type="ButtonGroup" id="ButtonGroup_modes"]
 allow_unpress = false
 
@@ -90,6 +117,8 @@ allow_unpress = false
 default_font_size = 16
 DesignTokens/colors/background = Color(0.0509804, 0.0666667, 0.0901961, 1)
 DesignTokens/colors/surface = Color(0.0901961, 0.117647, 0.156863, 1)
+DesignTokens/colors/surface_raised = Color(0.105882, 0.137255, 0.188235, 1)
+DesignTokens/colors/border = Color(0.160784, 0.196078, 0.254902, 1)
 DesignTokens/colors/action = Color(0.396078, 0.901961, 0.705882, 1)
 DesignTokens/colors/success = Color(0.156863, 0.658824, 0.470588, 1)
 DesignTokens/colors/present = Color(0.8, 0.615686, 0.2, 1)
@@ -114,6 +143,10 @@ Button/styles/hover = SubResource("StyleBox_button_hover")
 Button/styles/pressed = SubResource("StyleBox_button_pressed")
 Button/styles/focus = SubResource("StyleBox_button_focus")
 PanelContainer/styles/panel = SubResource("StyleBox_panel")
+BoardPanel/base_type = &"PanelContainer"
+BoardPanel/styles/panel = SubResource("StyleBox_board")
+KeyboardPanel/base_type = &"PanelContainer"
+KeyboardPanel/styles/panel = SubResource("StyleBox_keyboard")
 BackgroundPanel/base_type = &"PanelContainer"
 BackgroundPanel/styles/panel = SubResource("StyleBox_background")
 NoticePanel/base_type = &"PanelContainer"

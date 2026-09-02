@@ -1,17 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://features/gameplay/keyboard_view.gd" id="1_keyboard"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBox_sheet"]
-bg_color = Color(0.0705882, 0.0980392, 0.137255, 1)
-border_width_top = 1
-border_color = Color(0.172549, 0.215686, 0.27451, 1)
-corner_radius_top_left = 16
-corner_radius_top_right = 16
-content_margin_left = 8.0
-content_margin_top = 8.0
-content_margin_right = 8.0
-content_margin_bottom = 8.0
 
 [node name="KeyboardView" type="Control"]
 custom_minimum_size = Vector2(0, 44)
@@ -39,7 +28,7 @@ anchor_bottom = 1.0
 offset_top = -202.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_styles/panel = SubResource("StyleBox_sheet")
+theme_type_variation = &"KeyboardPanel"
 
 [node name="Content" type="VBoxContainer" parent="SheetContent"]
 layout_mode = 2

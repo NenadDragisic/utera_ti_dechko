@@ -148,6 +148,105 @@ func test_reset_cancel_is_a_no_op_for_progress_and_persistence() -> void:
 	assert_true(root.current_screen is GameScreen)
 
 
+func test_reset_dialog_traps_focus_and_restores_it_after_accessibility_cancel() -> void:
+	var root: Control = load("res://app/app_root.tscn").instantiate()
+	root.save_repository_override = MemorySaveRepository.new()
+	add_child_autofree(root)
+	root.current_screen.get_node("Center/Content/ModeCards/Mode2").pressed.emit()
+	await get_tree().process_frame
+	var game := root.current_screen as GameScreen
+	var focused_mode := game.get_node("Layout/ModeBar/Mode2") as Button
+	focused_mode.grab_focus()
+	await get_tree().process_frame
+	game.letter_typed.emit("А")
+	root.get_node("SafeArea/Layout/Footer/NewGameButton").pressed.emit()
+	await get_tree().process_frame
+	var dialog := root.get_node("ConfirmNewGameDialog") as ConfirmNewGameDialog
+	var cancel := dialog.get_node("Center/Panel/Content/Actions/CancelButton") as Button
+	var confirm := dialog.get_node("Center/Panel/Content/Actions/ConfirmButton") as Button
+	assert_same(get_viewport().gui_get_focus_owner(), cancel)
+	assert_eq(cancel.get_node_or_null(cancel.focus_next), confirm)
+	assert_eq(confirm.get_node_or_null(confirm.focus_next), cancel)
+	assert_eq(cancel.get_node_or_null(cancel.focus_previous), confirm)
+	assert_eq(confirm.get_node_or_null(confirm.focus_previous), cancel)
+
+	cancel.pressed.emit()
+	await get_tree().process_frame
+	assert_false(root.has_node("ConfirmNewGameDialog"))
+	assert_same(get_viewport().gui_get_focus_owner(), focused_mode)
+	assert_eq(game.process_mode, Node.PROCESS_MODE_INHERIT)
+
+
+func test_reset_dialog_blocks_keyboard_gameplay_and_escape_cancels() -> void:
+	var root: Control = load("res://app/app_root.tscn").instantiate()
+	root.save_repository_override = MemorySaveRepository.new()
+	add_child_autofree(root)
+	root.current_screen.get_node("Center/Content/ModeCards/Mode2").pressed.emit()
+	await get_tree().process_frame
+	root.current_screen.letter_typed.emit("А")
+	var input_before: String = root.coordinator.active_session().current_input
+
+	root.get_node("SafeArea/Layout/Footer/NewGameButton").pressed.emit()
+	await get_tree().process_frame
+	var letter_event := InputEventKey.new()
+	letter_event.pressed = true
+	letter_event.unicode = "Б".unicode_at(0)
+	Input.parse_input_event(letter_event)
+	await get_tree().process_frame
+	var input_after: String = root.coordinator.active_session().current_input
+	assert_eq(input_after, input_before)
+	if input_after != input_before:
+		root.get_node(
+			"ConfirmNewGameDialog/Center/Panel/Content/Actions/CancelButton"
+		).pressed.emit()
+		return
+
+	var escape_event := InputEventKey.new()
+	escape_event.pressed = true
+	escape_event.keycode = KEY_ESCAPE
+	Input.parse_input_event(escape_event)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_false(root.has_node("ConfirmNewGameDialog"))
+	assert_eq(root.coordinator.active_session().current_input, input_before)
+
+
+func test_reset_dialog_blocks_pointer_gameplay_until_accessibility_cancel() -> void:
+	var root: Control = load("res://app/app_root.tscn").instantiate()
+	root.save_repository_override = MemorySaveRepository.new()
+	add_child_autofree(root)
+	root.current_screen.get_node("Center/Content/ModeCards/Mode2").pressed.emit()
+	await get_tree().process_frame
+	var game := root.current_screen as GameScreen
+	var mode_four := game.get_node("Layout/ModeBar/Mode4") as Button
+	game.letter_typed.emit("А")
+
+	root.get_node("SafeArea/Layout/Footer/NewGameButton").pressed.emit()
+	await get_tree().process_frame
+	var dialog := root.get_node("ConfirmNewGameDialog") as ConfirmNewGameDialog
+	assert_eq(dialog.mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(dialog.get_node("Backdrop").mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(dialog.get_node("Center").mouse_filter, Control.MOUSE_FILTER_STOP)
+
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.position = mode_four.global_position + mode_four.size * 0.5
+	click.pressed = true
+	Input.parse_input_event(click)
+	click = click.duplicate()
+	click.pressed = false
+	Input.parse_input_event(click)
+	await get_tree().process_frame
+	assert_eq(root.coordinator.active_mode, 2)
+
+	dialog.get_node(
+		"Center/Panel/Content/Actions/CancelButton"
+	).pressed.emit()
+	await get_tree().process_frame
+	assert_false(root.has_node("ConfirmNewGameDialog"))
+	assert_eq(game.process_mode, Node.PROCESS_MODE_INHERIT)
+
+
 func test_reset_confirm_replaces_once_closes_overlays_and_preserves_statistics_and_settings() -> void:
 	var root: Control = load("res://app/app_root.tscn").instantiate()
 	var saves := MemorySaveRepository.new()

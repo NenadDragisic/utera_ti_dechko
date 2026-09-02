@@ -6,6 +6,8 @@ const NOTICE_BANNER_SCENE_PATH := "res://features/common/notice_banner.tscn"
 const DARK_THEME_PATH := "res://app/app_theme.tres"
 const LIGHT_THEME_PATH := "res://app/app_theme_light.tres"
 const ICON_PATH := "res://icon.svg"
+const BOARD_SCENE_PATH := "res://features/gameplay/board_view.tscn"
+const KEYBOARD_SCENE_PATH := "res://features/gameplay/keyboard_view.tscn"
 
 
 func test_shell_uses_full_rect_container_layout_and_exact_brand_copy() -> void:
@@ -161,7 +163,18 @@ func test_themes_expose_semantic_colors_spacing_and_accessible_text_contrast() -
 	if dark == null or light == null:
 		return
 
-	for semantic_name in ["background", "surface", "action", "success", "present", "invalid", "text", "muted_text"]:
+	for semantic_name in [
+		"background",
+		"surface",
+		"surface_raised",
+		"border",
+		"action",
+		"success",
+		"present",
+		"invalid",
+		"text",
+		"muted_text",
+	]:
 		assert_true(dark.has_color(semantic_name, "DesignTokens"), semantic_name)
 		assert_true(light.has_color(semantic_name, "DesignTokens"), semantic_name)
 	assert_gte(dark.get_constant("minimum_touch_target", "DesignTokens"), 44)
@@ -175,6 +188,76 @@ func test_themes_expose_semantic_colors_spacing_and_accessible_text_contrast() -
 	assert_gte(
 		_contrast_ratio(light.get_color("text", "DesignTokens"), light.get_color("background", "DesignTokens")),
 		4.5,
+	)
+
+
+func test_light_theme_resolves_readable_board_and_keyboard_surfaces() -> void:
+	var light: Theme = load(LIGHT_THEME_PATH)
+	var board: BoardView = load(BOARD_SCENE_PATH).instantiate()
+	var keyboard: KeyboardView = load(KEYBOARD_SCENE_PATH).instantiate()
+	board.theme = light
+	keyboard.theme = light
+	add_child_autofree(board)
+	add_child_autofree(keyboard)
+	var pool := WordPool.from_entries(PackedStringArray(["ААААА", "БББББ", "ВВВВВ"]))
+	var session := GameSession.create(PackedStringArray(["БББББ"]))
+	for letter in "ААААА":
+		assert_true(session.type_letter(letter, pool))
+	assert_true(session.submit(pool))
+	assert_true(session.type_letter("В", pool))
+	board.render(session.boards[0], session)
+	keyboard.render(session)
+
+	var board_surface := board.get_theme_stylebox("panel") as StyleBoxFlat
+	var header := board.get_node("Content/Header/BoardName") as Label
+	var absent := board.get_node("Content/Cells/Cell_0_0") as PanelContainer
+	var absent_glyph := absent.get_node("Glyph") as Label
+	var current := board.get_node("Content/Cells/Cell_1_0") as PanelContainer
+	var current_glyph := current.get_node("Glyph") as Label
+	var keyboard_surface := keyboard.get_node("SheetContent").get_theme_stylebox("panel") as StyleBoxFlat
+	var entry := keyboard.get_node("SheetContent/Content/Header/EntryLabel") as Label
+
+	assert_gte(
+		_contrast_ratio(header.get_theme_color("font_color"), board_surface.bg_color),
+		4.5,
+		"The resolved light-theme board header must remain readable on its panel.",
+	)
+	assert_gte(
+		_contrast_ratio(
+			absent_glyph.get_theme_color("font_color"),
+			(absent.get_theme_stylebox("panel") as StyleBoxFlat).bg_color,
+		),
+		4.5,
+		"The resolved light-theme absent glyph must remain readable.",
+	)
+	assert_gte(
+		_contrast_ratio(
+			current_glyph.get_theme_color("font_color"),
+			(current.get_theme_stylebox("panel") as StyleBoxFlat).bg_color,
+		),
+		4.5,
+		"The resolved light-theme current entry must remain readable.",
+	)
+	assert_gte(
+		_contrast_ratio(entry.get_theme_color("font_color"), keyboard_surface.bg_color),
+		4.5,
+		"The resolved light-theme keyboard entry must remain readable.",
+	)
+
+
+func test_platform_branding_preserves_the_existing_user_data_namespace() -> void:
+	assert_eq(
+		ProjectSettings.get_setting("application/config/name"),
+		"УТЕРА ТИ ДЕЧКО",
+	)
+	assert_true(ProjectSettings.get_setting("application/config/use_custom_user_dir"))
+	var normalized_user_dir := OS.get_user_data_dir().replace("\\", "/")
+	var expected_suffix := "/Godot/app_userdata/Utera ti dechko"
+	if OS.get_name() in ["Linux", "FreeBSD", "NetBSD", "OpenBSD", "BSD"]:
+		expected_suffix = "/godot/app_userdata/Utera ti dechko"
+	assert_true(
+		normalized_user_dir.ends_with(expected_suffix),
+		"Renaming the product must not move the existing user:// save namespace.",
 	)
 
 

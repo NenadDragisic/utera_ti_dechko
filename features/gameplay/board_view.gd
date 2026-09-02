@@ -140,7 +140,10 @@ func _style(state: String) -> StyleBoxFlat:
 	style.border_width_right = 1
 	style.border_width_bottom = 1
 	var surface := _semantic_color("surface", DesignTokens.DARK_SURFACE)
-	var border := DesignTokens.DARK_BORDER
+	var raised_surface := _semantic_color(
+		"surface_raised", DesignTokens.DARK_SURFACE_RAISED
+	)
+	var border := _semantic_color("border", DesignTokens.DARK_BORDER)
 	match state:
 		"correct":
 			surface = _semantic_color("success", DesignTokens.MINT_SUCCESS)
@@ -149,11 +152,11 @@ func _style(state: String) -> StyleBoxFlat:
 			surface = _semantic_color("present", DesignTokens.GOLD_PRESENT)
 			border = surface
 		"absent":
-			surface = DesignTokens.DARK_SURFACE_RAISED
-			border = DesignTokens.DARK_SURFACE_RAISED
+			surface = raised_surface
+			border = raised_surface
 		"current":
-			surface = DesignTokens.DARK_SURFACE_RAISED
-			border = DesignTokens.DARK_MUTED_TEXT
+			surface = raised_surface
+			border = _semantic_color("muted_text", DesignTokens.DARK_MUTED_TEXT)
 		"invalid":
 			var invalid := _semantic_color("invalid", DesignTokens.RED_INVALID)
 			surface = surface.lerp(invalid, 0.28)

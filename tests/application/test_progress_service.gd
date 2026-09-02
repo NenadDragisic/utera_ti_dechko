@@ -128,6 +128,62 @@ func test_changed_fingerprint_reconciles_bag_without_reintroducing_active_answer
 	assert_eq(repository.save_calls, 1)
 
 
+func test_matching_fingerprint_rejects_semantically_inconsistent_input_flags() -> void:
+	var cases := [
+		{"input": "А", "flag": true},
+		{"input": "ААААА", "flag": true},
+		{"input": "ЏЏЏЏЏ", "flag": false},
+	]
+	for case: Dictionary in cases:
+		var document := _valid_document()
+		document["bundle"]["sessions"]["1"]["current_input"] = case["input"]
+		document["bundle"]["sessions"]["1"]["input_is_invalid"] = case["flag"]
+		_assert_recovers_from(JSON.stringify(document))
+
+
+func test_changed_fingerprint_marks_a_removed_current_guess_invalid() -> void:
+	var repository := MemorySaveRepository.new()
+	var old_pool := _pool()
+	var old_service := _service(repository, old_pool)
+	old_service.load_or_create()
+	_type(old_service.bundle.sessions[1], "ААААА", old_pool)
+	assert_false(old_service.bundle.sessions[1].input_is_invalid)
+	assert_eq(old_service.flush_now(), OK)
+	repository.reset_tracking()
+	var changed_entries := old_pool.answers()
+	changed_entries.remove_at(changed_entries.find("ААААА"))
+	changed_entries.append("ЏЏЏЏЏ")
+	var changed_pool := WordPool.from_entries(changed_entries)
+
+	var restored := _service(repository, changed_pool).load_or_create()
+
+	assert_true(restored.restored)
+	assert_eq(restored.bundle.sessions[1].current_input, "ААААА")
+	assert_true(restored.bundle.sessions[1].input_is_invalid)
+	assert_eq(repository.save_calls, 1)
+
+
+func test_changed_fingerprint_marks_a_newly_added_current_guess_valid() -> void:
+	var repository := MemorySaveRepository.new()
+	var old_pool := _pool()
+	var old_service := _service(repository, old_pool)
+	old_service.load_or_create()
+	_type(old_service.bundle.sessions[1], "ЏЏЏЏЏ", old_pool)
+	assert_true(old_service.bundle.sessions[1].input_is_invalid)
+	assert_eq(old_service.flush_now(), OK)
+	repository.reset_tracking()
+	var changed_entries := old_pool.answers()
+	changed_entries.append("ЏЏЏЏЏ")
+	var changed_pool := WordPool.from_entries(changed_entries)
+
+	var restored := _service(repository, changed_pool).load_or_create()
+
+	assert_true(restored.restored)
+	assert_eq(restored.bundle.sessions[1].current_input, "ЏЏЏЏЏ")
+	assert_false(restored.bundle.sessions[1].input_is_invalid)
+	assert_eq(repository.save_calls, 1)
+
+
 func test_unrecorded_completed_restored_session_is_recorded_and_saved_once() -> void:
 	var repository := MemorySaveRepository.new()
 	var pool := _pool()

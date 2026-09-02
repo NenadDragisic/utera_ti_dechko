@@ -35,10 +35,19 @@ func show_share_fallback(text: String) -> void:
 	share_text.text = text
 	_share_fallback.visible = true
 	share_text.select_all()
+	get_tree().process_frame.connect(
+		_reveal_share_fallback.bind(share_text),
+		CONNECT_ONE_SHOT,
+	)
 
 
 func show_copy_success() -> void:
 	_share_fallback.visible = false
+
+
+func _reveal_share_fallback(share_text: TextEdit) -> void:
+	if is_instance_valid(share_text):
+		($Center as ScrollContainer).ensure_control_visible(share_text)
 
 
 func _on_mode_pressed(mode: int) -> void:

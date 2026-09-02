@@ -125,6 +125,95 @@ func test_app_root_routes_terminal_session_to_results_and_failed_copy_to_fallbac
 	)
 
 
+func test_physical_enter_on_final_non_winning_attempt_reaches_saved_results_in_every_mode() -> void:
+	for mode in [1, 2, 4, 8]:
+		var repository := MemorySaveRepository.new()
+		var root: AppRoot = load("res://app/app_root.tscn").instantiate()
+		root.save_repository_override = repository
+		add_child_autofree(root)
+		root.current_screen.get_node(
+			"Center/Content/ModeCards/Mode%d" % mode
+		).pressed.emit()
+		await get_tree().process_frame
+		var session: GameSession = root.coordinator.active_session()
+		var pool := root.word_repository.load_pool()
+		var loss_guess := _first_non_answer(pool, session)
+		assert_false(loss_guess.is_empty())
+
+		for attempt in range(session.attempt_limit):
+			var game := root.current_screen as GameScreen
+			for letter in loss_guess:
+				game.letter_typed.emit(letter)
+			if attempt < session.attempt_limit - 1:
+				game.submit_requested.emit()
+			else:
+				var enter := InputEventKey.new()
+				enter.pressed = true
+				enter.keycode = KEY_ENTER
+				game._unhandled_key_input(enter)
+		await get_tree().process_frame
+
+		assert_eq(session.status, GameSession.Status.LOST, "mode %d" % mode)
+		assert_eq(session.attempt_index, session.attempt_limit, "mode %d" % mode)
+		assert_true(session.statistics_recorded, "mode %d" % mode)
+		assert_true(root.current_screen is ResultsView, "mode %d" % mode)
+		assert_eq(
+			root.current_screen.get_node("Center/Content/Score").text,
+			"0/6",
+			"mode %d" % mode,
+		)
+		assert_eq(root.coordinator.statistics.score_counts_by_mode[mode][0], 1)
+		assert_eq(repository.save_calls, session.attempt_limit)
+		var saved: Dictionary = JSON.parse_string(repository.text)
+		assert_eq(
+			int(saved["bundle"]["sessions"][str(mode)]["status"]),
+			GameSession.Status.LOST,
+		)
+		assert_true(saved["bundle"]["sessions"][str(mode)]["statistics_recorded"])
+
+
+func test_first_mode_switch_after_loss_renders_every_destination_immediately() -> void:
+	for destination_mode in [1, 2, 4, 8]:
+		var source_mode := 2 if destination_mode == 1 else 1
+		var root: AppRoot = load("res://app/app_root.tscn").instantiate()
+		root.save_repository_override = MemorySaveRepository.new()
+		add_child_autofree(root)
+		root.current_screen.get_node(
+			"Center/Content/ModeCards/Mode%d" % source_mode
+		).pressed.emit()
+		await get_tree().process_frame
+		var source_session := root.coordinator.active_session()
+		var pool := root.word_repository.load_pool()
+		var loss_guess := _first_non_answer(pool, source_session)
+		for attempt in range(source_session.attempt_limit):
+			var game := root.current_screen as GameScreen
+			for letter in loss_guess:
+				game.letter_typed.emit(letter)
+			game.submit_requested.emit()
+		await get_tree().process_frame
+
+		assert_true(root.current_screen is ResultsView, "destination %d" % destination_mode)
+		root.current_screen.get_node(
+			"Center/Content/ContinueModes/Mode%d" % destination_mode
+		).pressed.emit()
+		await get_tree().process_frame
+
+		assert_true(root.current_screen is GameScreen, "destination %d" % destination_mode)
+		var destination_game := root.current_screen as GameScreen
+		var destination_session := root.coordinator.active_session()
+		assert_eq(root.coordinator.active_mode, destination_mode)
+		assert_eq(destination_session.status, GameSession.Status.ACTIVE)
+		assert_eq(
+			destination_game.get_node("Layout/BoardsScroll/BoardCenter/BoardsGrid").get_child_count(),
+			destination_mode,
+			"destination %d must render on its first switch" % destination_mode,
+		)
+		destination_game.letter_typed.emit("А")
+		assert_eq(destination_session.current_input, "А", "destination %d" % destination_mode)
+		root.queue_free()
+		await get_tree().process_frame
+
+
 func test_combined_clipboard_failure_also_opens_selectable_manual_fallback() -> void:
 	var root: Control = load("res://app/app_root.tscn").instantiate()
 	var clipboard := FakeClipboard.new()
@@ -179,6 +268,16 @@ func _type_and_submit(session: GameSession, word: String, pool: WordPool) -> voi
 	for letter in word:
 		assert_true(session.type_letter(letter, pool))
 	assert_true(session.submit(pool))
+
+
+func _first_non_answer(pool: WordPool, session: GameSession) -> String:
+	var answers := PackedStringArray()
+	for board in session.boards:
+		answers.append(board.answer)
+	for word in pool.answers():
+		if not answers.has(word):
+			return word
+	return ""
 
 
 func _signal_named(object: Object, signal_name: String) -> Dictionary:
