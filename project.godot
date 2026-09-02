@@ -1,5 +1,5 @@
 ; Engine configuration file.
-; It's best edited using the editor and not directly,
+; It's best edited using the editor UI and not directly,
 ; since the parameters that go here are not all obvious.
 ;
 ; Format:
@@ -10,23 +10,23 @@ config_version=5
 
 [application]
 
+config/name="УТЕРА ТИ ДЕЧКО"
+run/main_scene="res://app/app_root.tscn"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Utera ti dechko"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
-config/custom_user_dir_name="Godot/app_userdata/Utera ti dechko"
 config/custom_user_dir_name.linuxbsd="godot/app_userdata/Utera ti dechko"
-config/name="УТЕРА ТИ ДЕЧКО"
-config/use_custom_user_dir=true
-run/main_scene="res://app/app_root.tscn"
 
-[display/window]
+[display]
 
-size/viewport_width=1440
-size/viewport_height=900
-size/window_width_override=1440
-size/window_height_override=900
-stretch/mode="canvas_items"
-stretch/aspect="expand"
-handheld/orientation=6
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/window_width_override=1440
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=6
 
 [editor_plugins]
 
