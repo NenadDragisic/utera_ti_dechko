@@ -1,0 +1,51 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://features/common/notice_banner.gd" id="1_notice"]
+
+[node name="NoticeBanner" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_notice")
+
+[node name="TopMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 80.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 24
+
+[node name="Panel" type="PanelContainer" parent="TopMargin"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Layout" type="HBoxContainer" parent="TopMargin/Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Message" type="Label" parent="TopMargin/Panel/Layout"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+text = "Обавештење"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="DismissButton" type="Button" parent="TopMargin/Panel/Layout"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+tooltip_text = "Затвори обавештење"
+text = "×"

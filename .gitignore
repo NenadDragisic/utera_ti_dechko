@@ -1,4 +1,7 @@
+# Godot-generated project state.  GUT itself is vendored and export-excluded.
 .godot/
 .superpowers/
 builds/
 exports/
+*.keystore
+*.jks

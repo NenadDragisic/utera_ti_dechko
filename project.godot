@@ -1,0 +1,47 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="УТЕРА ТИ ДЕЧКО"
+run/main_scene="res://app/app_root.tscn"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Utera ti dechko"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+config/custom_user_dir_name.linuxbsd="godot/app_userdata/Utera ti dechko"
+
+[display]
+
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/window_width_override=1440
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=6
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
+
+[export]
+
+exclude_filter="addons/gut/*"
+
+[internationalization]
+
+locale/fallback="sr_Cyrl"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
