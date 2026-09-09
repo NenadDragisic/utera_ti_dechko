@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "godot-gdscript": {
+      "command": "/usr/bin/nc",
+      "args": ["127.0.0.1", "6015"],
+      "fileTypes": [".gd"],
+      "languageId": "gdscript",
+      "rootMarkers": ["project.godot"],
+      "warmupTimeoutMs": 15000
+    }
+  }
+}
