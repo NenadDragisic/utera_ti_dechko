@@ -22,6 +22,118 @@ The upstream `Godot_v4.7.2-stable_export_templates.tpz` used for the recorded re
 ca4d71c4d7b81dfc15d1a98baa07534aa95b03fdda78a0075b06672e1648d2e5f40980c9adc28d23e1b92e732ee7bf3461997aa804af74ec2fcd7a93ccb84079
 ```
 
+## OMP and GDScript LSP in WSL
+
+OMP runs inside WSL, so its GDScript language server must use the official
+Godot 4.7.2 Linux standard build against the local WSL project path. The Linux
+binary is an LSP companion only; the pinned Windows binary remains authoritative
+for `tools/test.ps1` and exports.
+
+The wrapper also requires OMP on `PATH`, standard WSL Windows interoperability
+for `powershell.exe`, OpenBSD netcat at `/usr/bin/nc`, and `ss` from `iproute2`
+at `/usr/bin/ss`. On Ubuntu or Debian WSL, install the socket tools with:
+
+```bash
+sudo apt-get update
+sudo apt-get install netcat-openbsd iproute2
+```
+
+Install the Linux binary outside the repository:
+
+```bash
+bash <<'GODOT_INSTALL'
+set -euo pipefail
+
+readonly expected_version='4.7.2.stable.official.ed1daf0bf'
+readonly install_dir="$HOME/.local/opt/godot-4.7.2"
+readonly binary="$install_dir/Godot_v4.7.2-stable_linux.x86_64"
+readonly launcher="$HOME/.local/bin/godot-4.7.2"
+readonly archive='/tmp/Godot_v4.7.2-stable_linux.x86_64.zip'
+
+if [[ -e "$launcher" || -L "$launcher" ]]; then
+  if [[ ! -f "$launcher" || ! -x "$launcher" ]]; then
+    printf 'Refusing to replace existing destination: %s\n' "$launcher" >&2
+    exit 1
+  fi
+else
+  mkdir -p "$install_dir" "$HOME/.local/bin"
+  trap 'rm -f "$archive"' EXIT
+  curl -L --fail \
+    -o "$archive" \
+    https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+  printf '%s  %s\n' \
+    'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4' \
+    "$archive" \
+    | sha256sum -c -
+  unzip -o "$archive" -d "$install_dir"
+  chmod 0755 "$binary"
+  ln -s "$binary" "$launcher"
+  rm -f "$archive"
+  trap - EXIT
+fi
+
+if ! installed_version="$("$launcher" --version)"; then
+  printf 'Refusing Godot executable that fails version validation: %s\n' \
+    "$launcher" >&2
+  exit 1
+fi
+if [[ "$installed_version" != "$expected_version" ]]; then
+  printf 'Refusing Godot version %q at %s; expected %s\n' \
+    "$installed_version" "$launcher" "$expected_version" >&2
+  exit 1
+fi
+printf '%s\n' "$installed_version"
+GODOT_INSTALL
+```
+
+The checksum command must pass. The final version output must be
+`4.7.2.stable.official.ed1daf0bf`, matching the Windows build. Do not commit
+the executable or downloaded archive.
+
+### Start OMP with the LSP ready
+
+After the one-time Linux installation, close every Windows Godot process and
+run this command from WSL:
+
+```bash
+./tools/omp_with_godot_lsp.sh
+```
+
+The wrapper requires standard WSL Windows interoperability so
+`powershell.exe` can check for a running Windows Godot process. It refuses to
+continue when Windows Godot is open, when that check fails, or when port
+`6015` is already occupied. Otherwise it starts the foreground Linux launcher,
+waits for the language server, starts OMP from the repository root, forwards
+any OMP arguments, and stops only the Linux Godot process it started when OMP
+exits or is interrupted.
+
+Use plain `omp` for repository work that does not need GDScript language
+operations; it leaves Linux Godot stopped. If manual process control is needed,
+use two terminals:
+
+```bash
+# Terminal 1, from the repository root
+./tools/start_godot_lsp.sh
+
+# Terminal 2, from the repository root
+omp
+```
+
+Port `6015` is reserved for the WSL-native Godot LSP service. The manual
+launcher stays in the foreground; stop it with Ctrl-C before running Windows
+import, `tools/test.ps1`, or exports. Do not run simultaneous Linux and Windows
+editor/import processes against the same `.godot` directory.
+
+If OMP attempted to initialize before Godot was ready, start the launcher and
+invoke an OMP workspace LSP reload with `file: "*"`, or start a new OMP
+session. A `nonlocal files` error, a self-hiding global-class diagnostic, or a
+cross-file definition that does not resolve indicates connection to the wrong
+Godot process or filesystem namespace.
+
+LSP diagnostics provide fast parser and type feedback. They do not verify scene
+paths, signals, persistence, runtime interaction, or exports; use the existing
+GUT and release gates for those behaviors.
+
 ## Android SDK and JDK
 
 In **Editor Settings > Export > Android**, configure:
