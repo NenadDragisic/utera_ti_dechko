@@ -11,6 +11,24 @@ The project uses typed GDScript, the Compatibility renderer, GUT 9.7.0, a thread
 - [Approved design specification](docs/superpowers/specs/2026-08-30-utera-ti-dechko-design.md)
 - [Implementation plan](docs/superpowers/plans/2026-08-30-utera-ti-dechko.md)
 
+### OMP with GDScript language support
+
+From WSL, complete the one-time [Linux Godot LSP setup](docs/setup/godot-development.md#omp-and-gdscript-lsp-in-wsl), close any Windows Godot editor, then run:
+
+```bash
+./tools/omp_with_godot_lsp.sh
+```
+
+The wrapper verifies that Windows Godot is not running, starts the matching Linux Godot language server, waits until it is ready, launches OMP from the project root, and stops Linux Godot when OMP exits. Use plain `omp` for work that does not need GDScript language operations; it does not start Godot.
+
+Never run Linux and Windows Godot editor/import processes against this repository at the same time. Exit the wrapped OMP session before using Windows Godot, exports, or `tools/test.ps1`.
+
+Verify the wrapper lifecycle from WSL:
+
+```bash
+tests/tools/test_omp_with_godot_lsp.sh
+```
+
 Run the complete automated gate from PowerShell:
 
 ```powershell

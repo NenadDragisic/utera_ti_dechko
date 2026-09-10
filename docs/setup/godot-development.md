@@ -81,9 +81,26 @@ The checksum command must pass. The final version output must be
 `4.7.2.stable.official.ed1daf0bf`, matching the Windows build. Do not commit
 the executable or downloaded archive.
 
-### Run the LSP service
+### Start OMP with the LSP ready
 
-Start the service before the first OMP LSP operation:
+After the one-time Linux installation, close every Windows Godot process and
+run this command from WSL:
+
+```bash
+./tools/omp_with_godot_lsp.sh
+```
+
+The wrapper requires standard WSL Windows interoperability so
+`powershell.exe` can check for a running Windows Godot process. It refuses to
+continue when Windows Godot is open, when that check fails, or when port
+`6015` is already occupied. Otherwise it starts the foreground Linux launcher,
+waits for the language server, starts OMP from the repository root, forwards
+any OMP arguments, and stops only the Linux Godot process it started when OMP
+exits or is interrupted.
+
+Use plain `omp` for repository work that does not need GDScript language
+operations; it leaves Linux Godot stopped. If manual process control is needed,
+use two terminals:
 
 ```bash
 # Terminal 1, from the repository root
@@ -93,9 +110,9 @@ Start the service before the first OMP LSP operation:
 omp
 ```
 
-Port `6015` is reserved for the WSL-native Godot LSP service. The launcher
-stays in the foreground; stop it with Ctrl-C before running Windows import,
-`tools/test.ps1`, or exports. Do not run simultaneous Linux and Windows
+Port `6015` is reserved for the WSL-native Godot LSP service. The manual
+launcher stays in the foreground; stop it with Ctrl-C before running Windows
+import, `tools/test.ps1`, or exports. Do not run simultaneous Linux and Windows
 editor/import processes against the same `.godot` directory.
 
 If OMP attempted to initialize before Godot was ready, start the launcher and
