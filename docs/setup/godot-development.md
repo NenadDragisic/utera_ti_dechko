@@ -29,6 +29,15 @@ Godot 4.7.2 Linux standard build against the local WSL project path. The Linux
 binary is an LSP companion only; the pinned Windows binary remains authoritative
 for `tools/test.ps1` and exports.
 
+The wrapper also requires OMP on `PATH`, standard WSL Windows interoperability
+for `powershell.exe`, OpenBSD netcat at `/usr/bin/nc`, and `ss` from `iproute2`
+at `/usr/bin/ss`. On Ubuntu or Debian WSL, install the socket tools with:
+
+```bash
+sudo apt-get update
+sudo apt-get install netcat-openbsd iproute2
+```
+
 Install the Linux binary outside the repository:
 
 ```bash

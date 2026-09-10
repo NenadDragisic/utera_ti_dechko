@@ -5,15 +5,32 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 readonly GODOT_LAUNCHER="$SCRIPT_DIR/start_godot_lsp.sh"
 readonly GODOT_PORT="6015"
-readonly WINDOWS_GODOT_CHECK='$ErrorActionPreference = "Stop"; try { $processes = @(Get-Process -Name "Godot*" -ErrorAction SilentlyContinue); if ($processes.Count -gt 0) { exit 10 }; exit 0 } catch { Write-Error $_; exit 11 }'
+readonly GODOT_START_TIMEOUT_SECONDS="15"
+readonly WINDOWS_GODOT_CHECK='$ErrorActionPreference = "Stop"; try { $processes = @(Get-Process -ErrorAction Stop | Where-Object { $_.ProcessName -like "Godot*" }); if ($processes.Count -gt 0) { exit 10 }; exit 0 } catch { Write-Error $_; exit 11 }'
 
 godot_pid=""
+
+is_active_child() {
+	local expected_pid="$1"
+	local active_pid
+	while read -r active_pid; do
+		[[ "$active_pid" == "$expected_pid" ]] && return 0
+	done < <(jobs -pr)
+	return 1
+}
+
+listener_is_owned_by() {
+	local expected_pid="$1"
+	local listeners
+	listeners="$(/usr/bin/ss -H -ltnp "sport = :$GODOT_PORT" 2>/dev/null)" || return 1
+	[[ "$listeners" == *"pid=$expected_pid,"* ]]
+}
 
 cleanup() {
 	local status=$?
 	trap - EXIT INT TERM
 	if [[ -n "$godot_pid" ]]; then
-		if kill -0 "$godot_pid" 2>/dev/null; then
+		if is_active_child "$godot_pid"; then
 			kill "$godot_pid" 2>/dev/null || true
 		fi
 		wait "$godot_pid" 2>/dev/null || true
@@ -39,6 +56,10 @@ if [[ ! -x "$GODOT_LAUNCHER" ]]; then
 fi
 if [[ ! -x /usr/bin/nc ]]; then
 	printf 'Godot LSP readiness probe is unavailable: /usr/bin/nc\n' >&2
+	exit 1
+fi
+if [[ ! -x /usr/bin/ss ]]; then
+	printf 'Godot LSP socket ownership check is unavailable: /usr/bin/ss\n' >&2
 	exit 1
 fi
 
@@ -69,12 +90,10 @@ printf 'Starting Linux Godot LSP on 127.0.0.1:%s...\n' "$GODOT_PORT"
 godot_pid=$!
 
 ready=0
-for ((attempt = 0; attempt < 150; attempt++)); do
-	if /usr/bin/nc -z -w 1 127.0.0.1 "$GODOT_PORT" 2>/dev/null; then
-		ready=1
-		break
-	fi
-	if ! kill -0 "$godot_pid" 2>/dev/null; then
+read -r uptime _ < /proc/uptime
+deadline=$(( ${uptime%%.*} + GODOT_START_TIMEOUT_SECONDS ))
+while true; do
+	if ! is_active_child "$godot_pid"; then
 		set +e
 		wait "$godot_pid"
 		godot_status=$?
@@ -83,11 +102,30 @@ for ((attempt = 0; attempt < 150; attempt++)); do
 		printf 'Linux Godot exited before its LSP became ready (exit %s).\n' "$godot_status" >&2
 		exit 1
 	fi
+
+	read -r uptime _ < /proc/uptime
+	now=${uptime%%.*}
+	if (( now >= deadline )); then
+		break
+	fi
+	remaining=$(( deadline - now ))
+	if /usr/bin/nc -z -w "$remaining" 127.0.0.1 "$GODOT_PORT" 2>/dev/null; then
+		if ! listener_is_owned_by "$godot_pid"; then
+			printf 'Port %s was claimed by a process other than the launched Linux Godot.\n' "$GODOT_PORT" >&2
+			exit 1
+		fi
+		if ! is_active_child "$godot_pid"; then
+			continue
+		fi
+		ready=1
+		break
+	fi
 	sleep 0.1
 done
 
 if [[ "$ready" -ne 1 ]]; then
-	printf 'Linux Godot LSP did not become ready on port %s within 15 seconds.\n' "$GODOT_PORT" >&2
+	printf 'Linux Godot LSP did not become ready on port %s within %s seconds.\n' \
+		"$GODOT_PORT" "$GODOT_START_TIMEOUT_SECONDS" >&2
 	exit 1
 fi
 

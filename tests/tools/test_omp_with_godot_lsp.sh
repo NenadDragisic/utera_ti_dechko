@@ -7,18 +7,25 @@ readonly WRAPPER="$PROJECT_DIR/tools/omp_with_godot_lsp.sh"
 readonly TEMP_DIR="$(mktemp -d)"
 readonly FAKE_BIN="$TEMP_DIR/bin"
 readonly GODOT_PID_FILE="$TEMP_DIR/godot.pid"
+readonly RIVAL_PID_FILE="$TEMP_DIR/rival.pid"
 readonly OMP_CWD_FILE="$TEMP_DIR/omp.cwd"
 readonly OMP_ARGS_FILE="$TEMP_DIR/omp.args"
 
-cleanup() {
-	if [[ -f "$GODOT_PID_FILE" ]]; then
+stop_pid_file() {
+	local pid_file="$1"
+	if [[ -f "$pid_file" ]]; then
 		local pid
-		pid="$(cat "$GODOT_PID_FILE")"
+		pid="$(cat "$pid_file")"
 		if kill -0 "$pid" 2>/dev/null; then
 			kill "$pid" 2>/dev/null || true
 			wait "$pid" 2>/dev/null || true
 		fi
 	fi
+}
+
+cleanup() {
+	stop_pid_file "$GODOT_PID_FILE"
+	stop_pid_file "$RIVAL_PID_FILE"
 	rm -rf "$TEMP_DIR"
 }
 trap cleanup EXIT
@@ -59,10 +66,7 @@ printf '%s\n' "$@" > "$FAKE_OMP_ARGS_FILE"
 exit "${FAKE_OMP_EXIT_STATUS:-0}"
 FAKE_OMP
 
-cat > "$FAKE_BIN/godot" <<'FAKE_GODOT'
-#!/usr/bin/env bash
-printf '%s\n' "$$" > "$FAKE_GODOT_PID_FILE"
-exec python3 - <<'PYTHON'
+cat > "$FAKE_BIN/listener.py" <<'FAKE_LISTENER'
 import signal
 import socket
 
@@ -79,7 +83,23 @@ signal.signal(signal.SIGTERM, stop)
 while True:
     connection, _address = server.accept()
     connection.close()
-PYTHON
+FAKE_LISTENER
+
+cat > "$FAKE_BIN/godot" <<'FAKE_GODOT'
+#!/usr/bin/env bash
+printf '%s\n' "$$" > "$FAKE_GODOT_PID_FILE"
+listener="$(dirname -- "$0")/listener.py"
+if [[ "${FAKE_GODOT_MODE:-normal}" == 'rival' ]]; then
+	python3 "$listener" </dev/null >/dev/null 2>&1 &
+	printf '%s\n' "$!" > "$FAKE_RIVAL_PID_FILE"
+	for ((attempt = 0; attempt < 100; attempt++)); do
+		/usr/bin/nc -z -w 1 127.0.0.1 6015 2>/dev/null && break
+		sleep 0.01
+	done
+	sleep 0.5
+	exit 1
+fi
+exec python3 "$listener"
 FAKE_GODOT
 
 chmod 0755 "$FAKE_BIN/powershell.exe" "$FAKE_BIN/omp" "$FAKE_BIN/godot"
@@ -94,6 +114,7 @@ common_env=(
 	"FAKE_GODOT_PID_FILE=$GODOT_PID_FILE"
 	"FAKE_OMP_CWD_FILE=$OMP_CWD_FILE"
 	"FAKE_OMP_ARGS_FILE=$OMP_ARGS_FILE"
+	"FAKE_RIVAL_PID_FILE=$RIVAL_PID_FILE"
 )
 
 set +e
@@ -104,6 +125,16 @@ set -e
 assert_contains "$windows_output" 'Windows Godot is running'
 [[ ! -e "$GODOT_PID_FILE" ]] || fail 'Linux Godot started during Windows-process refusal'
 [[ ! -e "$OMP_CWD_FILE" ]] || fail 'OMP started during Windows-process refusal'
+
+rm -f "$GODOT_PID_FILE" "$OMP_CWD_FILE" "$OMP_ARGS_FILE"
+set +e
+env "${common_env[@]}" FAKE_GODOT_MODE=rival "$WRAPPER" >/dev/null 2>&1
+race_status=$?
+set -e
+stop_pid_file "$RIVAL_PID_FILE"
+rm -f "$RIVAL_PID_FILE"
+[[ "$race_status" -ne 0 ]] || fail 'wrapper accepted a port owned by a different process'
+[[ ! -e "$OMP_CWD_FILE" ]] || fail 'OMP started against a port owned by a different process'
 
 happy_output="$(env "${common_env[@]}" "$WRAPPER" alpha 'two words' 2>&1)" || fail "happy path failed: $happy_output"
 [[ "$(cat "$OMP_CWD_FILE")" == "$PROJECT_DIR" ]] || fail 'OMP did not start from the project root'
