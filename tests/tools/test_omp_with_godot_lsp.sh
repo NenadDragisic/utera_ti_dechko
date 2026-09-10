@@ -91,12 +91,13 @@ printf '%s\n' "$$" > "$FAKE_GODOT_PID_FILE"
 listener="$(dirname -- "$0")/listener.py"
 if [[ "${FAKE_GODOT_MODE:-normal}" == 'rival' ]]; then
 	python3 "$listener" </dev/null >/dev/null 2>&1 &
-	printf '%s\n' "$!" > "$FAKE_RIVAL_PID_FILE"
+	rival_pid=$!
+	printf '%s\n' "$rival_pid" > "$FAKE_RIVAL_PID_FILE"
 	for ((attempt = 0; attempt < 100; attempt++)); do
 		/usr/bin/nc -z -w 1 127.0.0.1 6015 2>/dev/null && break
 		sleep 0.01
 	done
-	sleep 0.5
+	wait "$rival_pid"
 	exit 1
 fi
 exec python3 "$listener"
