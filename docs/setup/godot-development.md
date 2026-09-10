@@ -32,22 +32,49 @@ for `tools/test.ps1` and exports.
 Install the Linux binary outside the repository:
 
 ```bash
-mkdir -p "$HOME/.local/opt/godot-4.7.2" "$HOME/.local/bin"
-curl -L --fail \
-  -o /tmp/Godot_v4.7.2-stable_linux.x86_64.zip \
-  https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
-printf '%s  %s\n' \
-  'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4' \
-  '/tmp/Godot_v4.7.2-stable_linux.x86_64.zip' \
-  | sha256sum -c -
-unzip -o /tmp/Godot_v4.7.2-stable_linux.x86_64.zip \
-  -d "$HOME/.local/opt/godot-4.7.2"
-chmod 0755 "$HOME/.local/opt/godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64"
-ln -sfn \
-  "$HOME/.local/opt/godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64" \
-  "$HOME/.local/bin/godot-4.7.2"
-rm -f /tmp/Godot_v4.7.2-stable_linux.x86_64.zip
-"$HOME/.local/bin/godot-4.7.2" --version
+bash <<'GODOT_INSTALL'
+set -euo pipefail
+
+readonly expected_version='4.7.2.stable.official.ed1daf0bf'
+readonly install_dir="$HOME/.local/opt/godot-4.7.2"
+readonly binary="$install_dir/Godot_v4.7.2-stable_linux.x86_64"
+readonly launcher="$HOME/.local/bin/godot-4.7.2"
+readonly archive='/tmp/Godot_v4.7.2-stable_linux.x86_64.zip'
+
+if [[ -e "$launcher" || -L "$launcher" ]]; then
+  if [[ ! -f "$launcher" || ! -x "$launcher" ]]; then
+    printf 'Refusing to replace existing destination: %s\n' "$launcher" >&2
+    exit 1
+  fi
+else
+  mkdir -p "$install_dir" "$HOME/.local/bin"
+  trap 'rm -f "$archive"' EXIT
+  curl -L --fail \
+    -o "$archive" \
+    https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+  printf '%s  %s\n' \
+    'cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4' \
+    "$archive" \
+    | sha256sum -c -
+  unzip -o "$archive" -d "$install_dir"
+  chmod 0755 "$binary"
+  ln -s "$binary" "$launcher"
+  rm -f "$archive"
+  trap - EXIT
+fi
+
+if ! installed_version="$("$launcher" --version)"; then
+  printf 'Refusing Godot executable that fails version validation: %s\n' \
+    "$launcher" >&2
+  exit 1
+fi
+if [[ "$installed_version" != "$expected_version" ]]; then
+  printf 'Refusing Godot version %q at %s; expected %s\n' \
+    "$installed_version" "$launcher" "$expected_version" >&2
+  exit 1
+fi
+printf '%s\n' "$installed_version"
+GODOT_INSTALL
 ```
 
 The checksum command must pass. The final version output must be
